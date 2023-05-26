@@ -36,13 +36,13 @@ pub enum UpError {
     GoOn { go_on: Vec<String> },
 }
 
-pub trait UpParser<'input, T> {
+pub trait UpParser<'input, T>: Clone {
     fn parse(&self, input: &'input str) -> UpResult<'input, T>;
 }
 
 impl<'input, T, F> UpParser<'input, T> for F
 where
-    F: Fn(&'input str) -> UpResult<'input, T>,
+    F: Fn(&'input str) -> UpResult<'input, T> + Clone,
 {
     fn parse(&self, input: &'input str) -> UpResult<'input, T> {
         self(input)
@@ -143,9 +143,17 @@ where
     }
 }
 
+/// ```
+/// use parse_up::{tag, map, UpParser as _, util::yes_and};
+///
+/// assert_eq!(
+///     map(tag("true"), |_| true).parse("true..."),
+///     yes_and(true, "..."),
+/// );
+/// ```
 pub fn map<'input, T, U>(
     parser: impl UpParser<'input, T>,
-    f: impl Fn(T) -> U,
+    f: impl Fn(T) -> U + Clone,
 ) -> impl UpParser<'input, U> {
     move |input: &'input str| {
         parser.parse(input).map(
@@ -162,6 +170,16 @@ pub fn map<'input, T, U>(
     }
 }
 
+/// ```
+/// use parse_up::{dictionary, followed_by, UpParser as _, util::yes_and};
+///
+/// let parser = dictionary([("true", true), ("false", false)]);
+///
+/// assert_eq!(
+///     followed_by(parser.clone(), parser.clone()).parse("truefalse..."),
+///     yes_and((true, false), "..."),
+/// );
+/// ```
 pub fn followed_by<'input, L, R>(
     left: impl UpParser<'input, L>,
     right: impl UpParser<'input, R>,
