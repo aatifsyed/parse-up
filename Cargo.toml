@@ -2,6 +2,8 @@
 name = "parse-up"
 version = "0.1.0"
 edition = "2021"
+description = "parsing combinators that help the user build up to a successful parse"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
