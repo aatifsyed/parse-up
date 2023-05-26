@@ -4,6 +4,7 @@ use itertools::Itertools;
 
 use util::{chars_needed_to_complete, go_on, oops, yes_and, yes_and_also};
 
+pub mod reedline;
 pub mod util;
 
 pub type UpResult<'input, T> = Result<YesAnd<'input, T>, UpError>;
@@ -111,9 +112,9 @@ pub fn tag<'input, 'tag>(tag: &'tag str) -> impl UpParser<'input, &'input str> +
 ///     oops("expected one of [yes, true, no, false], not yep"),
 /// );
 /// ```
-pub fn dictionary<'input, KeyT, ValueT>(
+pub fn dictionary<KeyT, ValueT>(
     items: impl IntoIterator<Item = (KeyT, ValueT)>,
-) -> impl UpParser<'input, ValueT>
+) -> impl Fn(&str) -> UpResult<ValueT> + Clone
 where
     KeyT: Display,
     ValueT: Clone,
@@ -124,7 +125,7 @@ where
         // largest keys first
         .sorted_by_key(|(k, _v)| std::cmp::Reverse(k.clone()))
         .collect::<Vec<_>>();
-    move |input: &'input str| {
+    move |input: &str| {
         let mut suggestions = vec![];
         for (k, v) in &pairs {
             match map(tag(k), |_| v.clone()).parse(input) {
