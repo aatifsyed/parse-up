@@ -11,7 +11,7 @@ pub fn completer_and_validator<U: Send + 'static>(
     )
 }
 
-pub struct UpParseCompleter<T, U>(T, PhantomData<U>);
+struct UpParseCompleter<T, U>(T, PhantomData<U>);
 
 impl<ParserT, U> UpParseCompleter<ParserT, U>
 where
@@ -50,7 +50,7 @@ where
     }
 }
 
-pub struct UpParseValidator<T, U>(T, PhantomData<U>);
+struct UpParseValidator<T, U>(T, PhantomData<U>);
 
 impl<ParserT, U> UpParseValidator<ParserT, U>
 where

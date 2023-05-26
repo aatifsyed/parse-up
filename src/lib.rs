@@ -74,8 +74,9 @@ where
 ///     oops("expected hello, not world"),
 /// );
 /// ```
-pub fn tag<'input, 'tag>(tag: &'tag str) -> impl UpParser<'input, &'input str> + 'tag {
-    move |input: &'input str| match input.strip_prefix(tag) {
+#[allow(clippy::needless_lifetimes)]
+pub fn tag<'tag>(tag: &'tag str) -> impl Fn(&str) -> UpResult<&str> + Copy + 'tag {
+    move |input: &str| match input.strip_prefix(tag) {
         Some(rest) => yes_and(&input[..tag.len()], rest),
         None => match chars_needed_to_complete(tag, input) {
             Some("") => unreachable!("would've been caught in prefix"),
@@ -155,7 +156,7 @@ where
 pub fn map<'input, T, U>(
     parser: impl UpParser<'input, T>,
     f: impl Fn(T) -> U + Clone,
-) -> impl UpParser<'input, U> {
+) -> impl Fn(&'input str) -> UpResult<U> + Clone {
     move |input: &'input str| {
         parser.parse(input).map(
             |YesAnd {
@@ -184,7 +185,7 @@ pub fn map<'input, T, U>(
 pub fn followed_by<'input, L, R>(
     left: impl UpParser<'input, L>,
     right: impl UpParser<'input, R>,
-) -> impl UpParser<'input, (L, R)> {
+) -> impl Fn(&'input str) -> UpResult<(L, R)> + Clone {
     move |input| {
         let (left, input) = left.parse(input)?.cont();
         right.parse(input).map(
@@ -215,7 +216,9 @@ pub fn followed_by<'input, L, R>(
 ///     go_on(["rue"]),
 /// );
 /// ```
-pub fn many1<'input, T>(parser: impl UpParser<'input, T>) -> impl UpParser<'input, Vec<T>> {
+pub fn many1<'input, T>(
+    parser: impl UpParser<'input, T>,
+) -> impl Fn(&'input str) -> UpResult<Vec<T>> + Clone {
     move |input: &'input str| {
         let YesAnd {
             yes,
