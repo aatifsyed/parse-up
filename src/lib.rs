@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use itertools::Itertools;
 
-use util::{chars_needed_to_complete, go_on, oops, yes_and, yes_and_also};
+use util::{chars_needed_to_complete, go_on, oops, yes_and};
 
 pub mod util;
 
@@ -17,6 +17,13 @@ pub struct YesAnd<'input, T> {
     pub and: &'input str,
     /// Other valid options.
     pub could_also: Vec<String>,
+}
+
+impl<'input, T> YesAnd<'input, T> {
+    /// Discard the suggestions, and extract the parse output and remainder of input
+    pub fn cont(self) -> (T, &'input str) {
+        (self.yes, self.and)
+    }
 }
 
 /// Parsing couldn't continue.
@@ -120,10 +127,8 @@ where
     move |input: &'input str| {
         let mut suggestions = vec![];
         for (k, v) in &pairs {
-            match tag(k).parse(input) {
-                Ok(YesAnd {
-                    and, could_also, ..
-                }) => return yes_and_also(v.clone(), and, could_also),
+            match map(tag(k), |_| v.clone()).parse(input) {
+                Ok(ok) => return Ok(ok),
                 Err(UpError::Oops { .. }) => continue, // try another key
                 Err(UpError::GoOn { go_on }) => suggestions.extend(go_on),
             }
@@ -138,9 +143,41 @@ where
     }
 }
 
-pub fn and_then<'input, L, R>(
+pub fn map<'input, T, U>(
+    parser: impl UpParser<'input, T>,
+    f: impl Fn(T) -> U,
+) -> impl UpParser<'input, U> {
+    move |input: &'input str| {
+        parser.parse(input).map(
+            |YesAnd {
+                 yes,
+                 and,
+                 could_also,
+             }| YesAnd {
+                yes: f(yes),
+                and,
+                could_also,
+            },
+        )
+    }
+}
+
+pub fn followed_by<'input, L, R>(
     left: impl UpParser<'input, L>,
     right: impl UpParser<'input, R>,
 ) -> impl UpParser<'input, (L, R)> {
-    move |input| todo!()
+    move |input| {
+        let (left, input) = left.parse(input)?.cont();
+        right.parse(input).map(
+            |YesAnd {
+                 yes: right,
+                 and,
+                 could_also,
+             }| YesAnd {
+                yes: (left, right),
+                and,
+                could_also,
+            },
+        )
+    }
 }

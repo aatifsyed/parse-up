@@ -38,14 +38,6 @@ pub fn oops<'any, AnyT, MessageT: Display>(message: MessageT) -> UpResult<'any, 
     })
 }
 
-macro_rules! oops {
-    ($tt:tt) => {
-        Err(UpError::Oops {
-            message: format!($tt),
-        })
-    };
-}
-
 /// ```
 /// use parse_up::util::strip_matching_prefixes;
 /// assert_eq!(
