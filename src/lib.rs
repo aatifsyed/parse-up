@@ -2,17 +2,9 @@ use std::fmt::Display;
 
 use itertools::Itertools;
 
-use util::{chars_needed_to_complete, go_on, oops, yes_and};
+use util::{chars_needed_to_complete, go_on, oops, yes_and, yes_and_also};
 
 pub mod util;
-
-macro_rules! oops {
-    ($tt:tt) => {
-        Err(UpError::Oops {
-            message: format!($tt),
-        })
-    };
-}
 
 pub type UpResult<'input, T> = Result<YesAnd<'input, T>, UpError>;
 
@@ -80,11 +72,38 @@ pub fn tag<'input, 'tag>(tag: &'tag str) -> impl UpParser<'input, &'input str> +
         None => match chars_needed_to_complete(tag, input) {
             Some("") => unreachable!("would've been caught in prefix"),
             Some(suggestion) => go_on([suggestion]),
-            None => oops!("expected {tag}, not {input}"),
+            None => oops(format!("expected {tag}, not {input}")),
         },
     }
 }
 
+/// ```
+/// use parse_up::{UpParser as _, dictionary, util::{yes_and, go_on, oops}};
+///
+/// let parser = dictionary([
+///     ("true", true),
+///     ("false", false),
+///     ("yes", true),
+///     ("no", false),
+/// ]);
+///
+/// assert_eq!(
+///     parser.parse("true etc"),
+///     yes_and(true, " etc"),
+/// );
+/// assert_eq!(
+///     parser.parse(""),
+///     go_on(["yes", "true", "no", "false"]),
+/// );
+/// assert_eq!(
+///     parser.parse("y"),
+///     go_on(["es"]),
+/// );
+/// assert_eq!(
+///     parser.parse("yep"),
+///     oops("expected one of [yes, true, no, false], not yep"),
+/// );
+/// ```
 pub fn dictionary<'input, KeyT, ValueT>(
     items: impl IntoIterator<Item = (KeyT, ValueT)>,
 ) -> impl UpParser<'input, ValueT>
@@ -98,7 +117,25 @@ where
         // largest keys first
         .sorted_by_key(|(k, _v)| std::cmp::Reverse(k.clone()))
         .collect::<Vec<_>>();
-    move |input: &str| todo!()
+    move |input: &'input str| {
+        let mut suggestions = vec![];
+        for (k, v) in &pairs {
+            match tag(k).parse(input) {
+                Ok(YesAnd {
+                    and, could_also, ..
+                }) => return yes_and_also(v.clone(), and, could_also),
+                Err(UpError::Oops { .. }) => continue, // try another key
+                Err(UpError::GoOn { go_on }) => suggestions.extend(go_on),
+            }
+        }
+        match suggestions.is_empty() {
+            true => oops(format!(
+                "expected one of [{}], not {input}",
+                pairs.iter().map(|it| &it.0).join(", ")
+            )),
+            false => go_on(suggestions),
+        }
+    }
 }
 
 pub fn and_then<'input, L, R>(
