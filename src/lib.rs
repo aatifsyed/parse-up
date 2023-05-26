@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use itertools::Itertools;
 
-use util::{chars_needed_to_complete, go_on, oops, yes_and};
+use util::{chars_needed_to_complete, go_on, oops, yes_and, yes_and_also};
 
 pub mod util;
 
@@ -197,5 +197,68 @@ pub fn followed_by<'input, L, R>(
                 could_also,
             },
         )
+    }
+}
+
+/// ```
+/// use parse_up::{dictionary, many1, UpParser as _, util::{yes_and, go_on}};
+///
+/// let parser = dictionary([("true", true), ("false", false)]);
+///
+/// assert_eq!(
+///     many1(parser.clone()).parse("truefalse..."),
+///     yes_and(vec![true, false], "..."),
+/// );
+/// assert_eq!(
+///     many1(parser).parse("t"),
+///     go_on(["rue"]),
+/// );
+/// ```
+pub fn many1<'input, T>(parser: impl UpParser<'input, T>) -> impl UpParser<'input, Vec<T>> {
+    move |input: &'input str| {
+        let YesAnd {
+            yes,
+            and,
+            could_also,
+        } = parser.parse(input)?;
+        let mut yeses = vec![yes];
+        let mut input = and;
+        while let Ok(YesAnd { yes, and, .. }) = parser.parse(input) {
+            input = and;
+            yeses.push(yes);
+        }
+        yes_and_also(yeses, input, could_also)
+    }
+}
+
+/// ```
+/// use parse_up::{whitespace, UpParser as _, util::{yes_and, go_on, oops}};
+///
+/// assert_eq!(
+///     whitespace.parse(" hello"),
+///     yes_and(" ", "hello"),
+/// );
+/// assert_eq!(
+///     whitespace.parse("    hello"),
+///     yes_and("    ", "hello"),
+/// );
+/// assert_eq!(
+///     whitespace.parse(""),
+///     go_on([" "]),
+/// );
+/// assert_eq!(
+///     whitespace.parse("hello"),
+///     oops("expected whitespace, not hello"),
+/// );
+/// ```
+pub fn whitespace(input: &str) -> UpResult<&str> {
+    if input.is_empty() {
+        return go_on([" "]);
+    }
+    let trimmed = input.trim_start();
+    let bytes_trimmed = input.len() - trimmed.len();
+    match bytes_trimmed {
+        0 => oops(format!("expected whitespace, not {input}")),
+        _ => yes_and(&input[..bytes_trimmed], trimmed),
     }
 }
