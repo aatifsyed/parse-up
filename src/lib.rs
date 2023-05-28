@@ -7,7 +7,7 @@ use util::{chars_needed_to_complete, go_on, oops, yes_and, yes_and_also};
 pub mod reedline;
 pub mod util;
 
-pub type UpResult<'input, T> = Result<YesAnd<'input, T>, UpError>;
+pub type UpResult<'input, T> = Result<YesAnd<'input, T>, UpError<'input>>;
 
 /// Successful parse so far.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -29,25 +29,12 @@ impl<'input, T> YesAnd<'input, T> {
 
 /// Parsing couldn't continue.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum UpError {
+pub enum UpError<'input> {
     /// Parse error.
-    Oops { message: String },
+    Oops { input: &'input str, message: String },
     /// Suggestions to append to the current input which would make parsing succeed.
     /// You should only return this when you're at the end of the input.
     GoOn { go_on: Vec<String> },
-}
-
-pub trait UpParser<'input, T>: Clone {
-    fn parse(&self, input: &'input str) -> UpResult<'input, T>;
-}
-
-impl<'input, T, F> UpParser<'input, T> for F
-where
-    F: Fn(&'input str) -> UpResult<'input, T> + Clone,
-{
-    fn parse(&self, input: &'input str) -> UpResult<'input, T> {
-        self(input)
-    }
 }
 
 /// Takes the string `tag` from the input.
@@ -81,7 +68,7 @@ pub fn tag<'tag>(tag: &'tag str) -> impl Fn(&str) -> UpResult<&str> + Copy + 'ta
         None => match chars_needed_to_complete(tag, input) {
             Some("") => unreachable!("would've been caught in prefix"),
             Some(suggestion) => go_on([suggestion]),
-            None => oops(format!("expected {tag}, not {input}")),
+            None => oops(input, format!("expected {tag}")),
         },
     }
 }
@@ -115,7 +102,7 @@ pub fn tag<'tag>(tag: &'tag str) -> impl Fn(&str) -> UpResult<&str> + Copy + 'ta
 /// ```
 pub fn dictionary<KeyT, ValueT>(
     items: impl IntoIterator<Item = (KeyT, ValueT)>,
-) -> impl Fn(&str) -> UpResult<ValueT> + Clone
+) -> impl Fn(&str) -> UpResult<ValueT>
 where
     KeyT: Display,
     ValueT: Clone,
@@ -129,17 +116,20 @@ where
     move |input: &str| {
         let mut suggestions = vec![];
         for (k, v) in &pairs {
-            match map(tag(k), |_| v.clone()).parse(input) {
+            match map(tag(k), |_| v.clone())(input) {
                 Ok(ok) => return Ok(ok),
                 Err(UpError::Oops { .. }) => continue, // try another key
                 Err(UpError::GoOn { go_on }) => suggestions.extend(go_on),
             }
         }
         match suggestions.is_empty() {
-            true => oops(format!(
-                "expected one of [{}], not {input}",
-                pairs.iter().map(|it| &it.0).join(", ")
-            )),
+            true => oops(
+                input,
+                format!(
+                    "expected one of [{}]",
+                    pairs.iter().map(|it| &it.0).join(", ")
+                ),
+            ),
             false => go_on(suggestions),
         }
     }
@@ -154,11 +144,11 @@ where
 /// );
 /// ```
 pub fn map<'input, T, U>(
-    parser: impl UpParser<'input, T>,
-    f: impl Fn(T) -> U + Clone,
-) -> impl Fn(&'input str) -> UpResult<U> + Clone {
+    parser: impl Fn(&'input str) -> UpResult<'input, T>,
+    f: impl Fn(T) -> U,
+) -> impl Fn(&'input str) -> UpResult<U> {
     move |input: &'input str| {
-        parser.parse(input).map(
+        parser(input).map(
             |YesAnd {
                  yes,
                  and,
@@ -183,12 +173,12 @@ pub fn map<'input, T, U>(
 /// );
 /// ```
 pub fn followed_by<'input, L, R>(
-    left: impl UpParser<'input, L>,
-    right: impl UpParser<'input, R>,
-) -> impl Fn(&'input str) -> UpResult<(L, R)> + Clone {
+    left: impl Fn(&'input str) -> UpResult<'input, L>,
+    right: impl Fn(&'input str) -> UpResult<'input, R>,
+) -> impl Fn(&'input str) -> UpResult<'input, (L, R)> {
     move |input| {
-        let (left, input) = left.parse(input)?.cont();
-        right.parse(input).map(
+        let (left, input) = left(input)?.cont();
+        right(input).map(
             |YesAnd {
                  yes: right,
                  and,
@@ -216,18 +206,16 @@ pub fn followed_by<'input, L, R>(
 ///     go_on(["rue"]),
 /// );
 /// ```
-pub fn many1<'input, T>(
-    parser: impl UpParser<'input, T>,
-) -> impl Fn(&'input str) -> UpResult<Vec<T>> + Clone {
-    move |input: &'input str| {
+pub fn many1<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResult<Vec<T>> {
+    move |input: &str| {
         let YesAnd {
             yes,
             and,
             could_also,
-        } = parser.parse(input)?;
+        } = parser(input)?;
         let mut yeses = vec![yes];
         let mut input = and;
-        while let Ok(YesAnd { yes, and, .. }) = parser.parse(input) {
+        while let Ok(YesAnd { yes, and, .. }) = parser(input) {
             input = and;
             yeses.push(yes);
         }
@@ -262,7 +250,7 @@ pub fn whitespace(input: &str) -> UpResult<&str> {
     let trimmed = input.trim_start();
     let bytes_trimmed = input.len() - trimmed.len();
     match bytes_trimmed {
-        0 => oops(format!("expected whitespace, not {input}")),
+        0 => oops(input, "expected whitespace"),
         _ => yes_and(&input[..bytes_trimmed], trimmed),
     }
 }

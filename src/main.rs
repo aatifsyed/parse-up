@@ -1,13 +1,19 @@
 use anyhow::bail;
-use parse_up::{dictionary, reedline::completer_and_validator, UpParser};
+use parse_up::{
+    dictionary, followed_by,
+    reedline::{completer, validator},
+    whitespace,
+};
 use reedline::{
     default_emacs_keybindings, ColumnarMenu, DefaultPrompt, Emacs, KeyCode, KeyModifiers, Reedline,
     ReedlineEvent, ReedlineMenu, Signal,
 };
 
 fn main() -> anyhow::Result<()> {
-    let parser = dictionary([("true", true), ("false", false)]);
-    let (completer, validator) = completer_and_validator(parser.clone());
+    let bool_parser = dictionary([("true", true), ("false", false)]);
+    let parser = followed_by(&bool_parser, whitespace);
+    let completer = completer(&bool_parser);
+    let validator = validator(&bool_parser);
     let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
     // Set up the required keybindings
     let mut keybindings = default_emacs_keybindings();
@@ -22,15 +28,15 @@ fn main() -> anyhow::Result<()> {
 
     let edit_mode = Box::new(Emacs::new(keybindings));
     match Reedline::create()
-        .with_completer(completer)
-        .with_validator(validator)
+        // .with_completer(completer)
+        // .with_validator(validator)
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
         .with_edit_mode(edit_mode)
         .read_line(&DefaultPrompt::default())?
     {
         Signal::CtrlC | Signal::CtrlD => bail!("input aborted"),
         Signal::Success(buffer) => {
-            let result = parser.parse(&buffer).expect("passed validation");
+            let result = bool_parser(&buffer).expect("passed validation");
             println!("{result:?}");
         }
     }

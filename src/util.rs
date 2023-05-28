@@ -32,8 +32,9 @@ pub fn go_on<'any, AnyT, GoOnT: Display>(
     })
 }
 
-pub fn oops<'any, AnyT, MessageT: Display>(message: MessageT) -> UpResult<'any, AnyT> {
+pub fn oops<AnyT, MessageT: Display>(input: &str, message: MessageT) -> UpResult<AnyT> {
     Err(UpError::Oops {
+        input,
         message: message.to_string(),
     })
 }
