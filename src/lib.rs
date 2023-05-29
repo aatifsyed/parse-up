@@ -43,33 +43,33 @@ pub enum UpError<'input> {
 /// use parse_up::{tag, util::{yes_and, go_on, oops}};
 /// assert_eq!(
 ///     tag("hello")(""),
-///     go_on(["hello"]),
+///     Err(go_on(["hello"])),
 /// );
 /// assert_eq!(
 ///     tag("hello")("hell"),
-///     go_on(["o"]),
+///     Err(go_on(["o"])),
 /// );
 /// assert_eq!(
 ///     tag("hello")("hello"),
-///     yes_and("hello", ""),
+///     Ok(yes_and("hello", "")),
 /// );
 /// assert_eq!(
 ///     tag("hello")("hello, world!"),
-///     yes_and("hello", ", world!"),
+///     Ok(yes_and("hello", ", world!")),
 /// );
 /// assert_eq!(
 ///     tag("hello")("world"),
-///     oops("world", "expected hello"),
+///     Err(oops("world", "expected hello")),
 /// );
 /// ```
 #[allow(clippy::needless_lifetimes)]
 pub fn tag<'tag>(tag: &'tag str) -> impl Fn(&str) -> UpResult<&str> + Copy + 'tag {
     move |input: &str| match input.strip_prefix(tag) {
-        Some(rest) => yes_and(&input[..tag.len()], rest),
+        Some(rest) => Ok(yes_and(&input[..tag.len()], rest)),
         None => match chars_needed_to_complete(tag, input) {
             Some("") => unreachable!("would've been caught in prefix"),
-            Some(suggestion) => go_on([suggestion]),
-            None => oops(input, format!("expected {tag}")),
+            Some(suggestion) => Err(go_on([suggestion])),
+            None => Err(oops(input, format!("expected {tag}"))),
         },
     }
 }
@@ -86,19 +86,19 @@ pub fn tag<'tag>(tag: &'tag str) -> impl Fn(&str) -> UpResult<&str> + Copy + 'ta
 ///
 /// assert_eq!(
 ///     parser("true etc"),
-///     yes_and(true, " etc"),
+///     Ok(yes_and(true, " etc")),
 /// );
 /// assert_eq!(
 ///     parser(""),
-///     go_on(["yes", "true", "no", "false"]),
+///     Err(go_on(["yes", "true", "no", "false"])),
 /// );
 /// assert_eq!(
 ///     parser("y"),
-///     go_on(["es"]),
+///     Err(go_on(["es"])),
 /// );
 /// assert_eq!(
 ///     parser("yep"),
-///     oops("yep", "expected one of [yes, true, no, false]"),
+///     Err(oops("yep", "expected one of [yes, true, no, false]")),
 /// );
 /// ```
 pub fn dictionary<KeyT, ValueT>(
@@ -124,14 +124,14 @@ where
             }
         }
         match suggestions.is_empty() {
-            true => oops(
+            true => Err(oops(
                 input,
                 format!(
                     "expected one of [{}]",
                     pairs.iter().map(|it| &it.0).join(", ")
                 ),
-            ),
-            false => go_on(suggestions),
+            )),
+            false => Err(go_on(suggestions)),
         }
     }
 }
@@ -141,7 +141,7 @@ where
 ///
 /// assert_eq!(
 ///     map(tag("true"), |_| true)("true..."),
-///     yes_and(true, "..."),
+///     Ok(yes_and(true, "...")),
 /// );
 /// ```
 pub fn map<'input, T, U>(
@@ -170,11 +170,11 @@ pub fn map<'input, T, U>(
 ///
 /// assert_eq!(
 ///     many1(parser.clone())("truefalse..."),
-///     yes_and(vec![true, false], "..."),
+///     Ok(yes_and(vec![true, false], "...")),
 /// );
 /// assert_eq!(
 ///     many1(parser)("t"),
-///     go_on(["rue"]),
+///     Err(go_on(["rue"])),
 /// );
 /// ```
 pub fn many1<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResult<Vec<T>> {
@@ -190,7 +190,7 @@ pub fn many1<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResu
             input = and;
             yeses.push(yes);
         }
-        yes_and_also(yeses, input, could_also)
+        Ok(yes_and_also(yeses, input, could_also))
     }
 }
 
@@ -199,30 +199,30 @@ pub fn many1<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResu
 ///
 /// assert_eq!(
 ///     whitespace(" hello"),
-///     yes_and(" ", "hello"),
+///     Ok(yes_and(" ", "hello")),
 /// );
 /// assert_eq!(
 ///     whitespace("    hello"),
-///     yes_and("    ", "hello"),
+///     Ok(yes_and("    ", "hello")),
 /// );
 /// assert_eq!(
 ///     whitespace(""),
-///     go_on([" "]),
+///     Err(go_on([" "])),
 /// );
 /// assert_eq!(
 ///     whitespace("hello"),
-///     oops("hello", "expected whitespace"),
+///     Err(oops("hello", "expected whitespace")),
 /// );
 /// ```
 pub fn whitespace(input: &str) -> UpResult<&str> {
     if input.is_empty() {
-        return go_on([" "]);
+        return Err(go_on([" "]));
     }
     let trimmed = input.trim_start();
     let bytes_trimmed = input.len() - trimmed.len();
     match bytes_trimmed {
-        0 => oops(input, "expected whitespace"),
-        _ => yes_and(&input[..bytes_trimmed], trimmed),
+        0 => Err(oops(input, "expected whitespace")),
+        _ => Ok(yes_and(&input[..bytes_trimmed], trimmed)),
     }
 }
 
@@ -240,7 +240,7 @@ pub fn whitespace(input: &str) -> UpResult<&str> {
 ///
 /// assert_eq!(
 ///     parser("foobar..."),
-///     yes_and(("foo", "bar"), "..."),
+///     Ok(yes_and(("foo", "bar"), "...")),
 /// );
 /// ```
 #[macro_export]
@@ -256,6 +256,6 @@ macro_rules! sequence {
                 t
             },)*
         );
-        $crate::util::yes_and(parsed, input)
+        $crate::UpResult::Ok($crate::util::yes_and(parsed, input))
     }};
 }

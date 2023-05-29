@@ -2,41 +2,39 @@ use std::fmt::Display;
 
 use itertools::Itertools as _;
 
-use crate::{UpError, UpResult, YesAnd};
+use crate::{UpError, YesAnd};
 
-pub fn yes_and<T>(yes: T, and: &str) -> UpResult<T> {
-    Ok(YesAnd {
+pub fn yes_and<T>(yes: T, and: &str) -> YesAnd<T> {
+    YesAnd {
         yes,
         and,
         could_also: vec![],
-    })
+    }
 }
 
 pub fn yes_and_also<T, AlsoT: Display>(
     yes: T,
     and: &str,
     also: impl IntoIterator<Item = AlsoT>,
-) -> UpResult<T> {
-    Ok(YesAnd {
+) -> YesAnd<T> {
+    YesAnd {
         yes,
         and,
         could_also: also.into_iter().map(|a| a.to_string()).collect(),
-    })
+    }
 }
 
-pub fn go_on<'any, AnyT, GoOnT: Display>(
-    suggestions: impl IntoIterator<Item = GoOnT>,
-) -> UpResult<'any, AnyT> {
-    Err(UpError::GoOn {
+pub fn go_on<'any, GoOnT: Display>(suggestions: impl IntoIterator<Item = GoOnT>) -> UpError<'any> {
+    UpError::GoOn {
         go_on: suggestions.into_iter().map(|g| g.to_string()).collect(),
-    })
+    }
 }
 
-pub fn oops<AnyT, MessageT: Display>(input: &str, message: MessageT) -> UpResult<AnyT> {
-    Err(UpError::Oops {
+pub fn oops<MessageT: Display>(input: &str, message: MessageT) -> UpError<'_> {
+    UpError::Oops {
         input,
         message: message.to_string(),
-    })
+    }
 }
 
 /// ```
