@@ -1,6 +1,6 @@
 use anyhow::bail;
 use parse_up::{
-    dictionary, followed_by,
+    dictionary,
     reedline::{completer, validator},
     whitespace,
 };
@@ -11,7 +11,7 @@ use reedline::{
 
 fn main() -> anyhow::Result<()> {
     let bool_parser = dictionary([("true", true), ("false", false)]);
-    let parser = followed_by(&bool_parser, whitespace);
+    // let parser = followed_by(&bool_parser, whitespace);
     let completer = completer(&bool_parser);
     let validator = validator(&bool_parser);
     let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));

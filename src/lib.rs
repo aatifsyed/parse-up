@@ -164,36 +164,6 @@ pub fn map<'input, T, U>(
 }
 
 /// ```
-/// use parse_up::{dictionary, followed_by, util::yes_and};
-///
-/// let parser = dictionary([("true", true), ("false", false)]);
-///
-/// assert_eq!(
-///     followed_by(parser.clone(), parser.clone())("truefalse..."),
-///     yes_and((true, false), "..."),
-/// );
-/// ```
-pub fn followed_by<'input, L, R>(
-    left: impl Fn(&'input str) -> UpResult<'input, L>,
-    right: impl Fn(&'input str) -> UpResult<'input, R>,
-) -> impl Fn(&'input str) -> UpResult<'input, (L, R)> {
-    move |input| {
-        let (left, input) = left(input)?.cont();
-        right(input).map(
-            |YesAnd {
-                 yes: right,
-                 and,
-                 could_also,
-             }| YesAnd {
-                yes: (left, right),
-                and,
-                could_also,
-            },
-        )
-    }
-}
-
-/// ```
 /// use parse_up::{dictionary, many1, util::{yes_and, go_on}};
 ///
 /// let parser = dictionary([("true", true), ("false", false)]);
@@ -254,4 +224,38 @@ pub fn whitespace(input: &str) -> UpResult<&str> {
         0 => oops(input, "expected whitespace"),
         _ => yes_and(&input[..bytes_trimmed], trimmed),
     }
+}
+
+/// Expands to a block which runs a sequence of parsers, one after the other,
+/// returning their results in a tuple.
+/// ```
+/// use parse_up::{tag, sequence, util::yes_and, UpResult};
+///
+/// let parser = |input| {
+///     sequence!(input {
+///         tag("foo"),
+///         tag("bar"),
+///     })
+/// };
+///
+/// assert_eq!(
+///     parser("foobar..."),
+///     yes_and(("foo", "bar"), "..."),
+/// );
+/// ```
+#[macro_export]
+macro_rules! sequence {
+    ($input:ident {
+        $($parser:expr),* $(,)?
+    }) => {{
+        let mut input = $input;
+        let parsed = (
+            $({
+                let (t, rest) = ($parser)(input)?.cont();
+                input = rest;
+                t
+            },)*
+        );
+        $crate::util::yes_and(parsed, input)
+    }};
 }
