@@ -21,7 +21,8 @@ pub struct YesAnd<'input, T> {
 }
 
 impl<'input, T> YesAnd<'input, T> {
-    /// Discard the suggestions, and extract the parse output and remainder of input
+    /// Discard the suggestions, and extract the parse output and remainder of input.
+    /// Useful for chaining together parsers.
     pub fn cont(self) -> (T, &'input str) {
         (self.yes, self.and)
     }
@@ -39,26 +40,26 @@ pub enum UpError<'input> {
 
 /// Takes the string `tag` from the input.
 /// ```
-/// use parse_up::{UpParser as _, tag, util::{yes_and, go_on, oops}};
+/// use parse_up::{tag, util::{yes_and, go_on, oops}};
 /// assert_eq!(
-///     tag("hello").parse(""),
+///     tag("hello")(""),
 ///     go_on(["hello"]),
 /// );
 /// assert_eq!(
-///     tag("hello").parse("hell"),
+///     tag("hello")("hell"),
 ///     go_on(["o"]),
 /// );
 /// assert_eq!(
-///     tag("hello").parse("hello"),
+///     tag("hello")("hello"),
 ///     yes_and("hello", ""),
 /// );
 /// assert_eq!(
-///     tag("hello").parse("hello, world!"),
+///     tag("hello")("hello, world!"),
 ///     yes_and("hello", ", world!"),
 /// );
 /// assert_eq!(
-///     tag("hello").parse("world"),
-///     oops("expected hello, not world"),
+///     tag("hello")("world"),
+///     oops("world", "expected hello"),
 /// );
 /// ```
 #[allow(clippy::needless_lifetimes)]
@@ -74,7 +75,7 @@ pub fn tag<'tag>(tag: &'tag str) -> impl Fn(&str) -> UpResult<&str> + Copy + 'ta
 }
 
 /// ```
-/// use parse_up::{UpParser as _, dictionary, util::{yes_and, go_on, oops}};
+/// use parse_up::{dictionary, util::{yes_and, go_on, oops}};
 ///
 /// let parser = dictionary([
 ///     ("true", true),
@@ -84,25 +85,25 @@ pub fn tag<'tag>(tag: &'tag str) -> impl Fn(&str) -> UpResult<&str> + Copy + 'ta
 /// ]);
 ///
 /// assert_eq!(
-///     parser.parse("true etc"),
+///     parser("true etc"),
 ///     yes_and(true, " etc"),
 /// );
 /// assert_eq!(
-///     parser.parse(""),
+///     parser(""),
 ///     go_on(["yes", "true", "no", "false"]),
 /// );
 /// assert_eq!(
-///     parser.parse("y"),
+///     parser("y"),
 ///     go_on(["es"]),
 /// );
 /// assert_eq!(
-///     parser.parse("yep"),
-///     oops("expected one of [yes, true, no, false], not yep"),
+///     parser("yep"),
+///     oops("yep", "expected one of [yes, true, no, false]"),
 /// );
 /// ```
 pub fn dictionary<KeyT, ValueT>(
     items: impl IntoIterator<Item = (KeyT, ValueT)>,
-) -> impl Fn(&str) -> UpResult<ValueT>
+) -> impl Fn(&str) -> UpResult<ValueT> + Clone
 where
     KeyT: Display,
     ValueT: Clone,
@@ -136,10 +137,10 @@ where
 }
 
 /// ```
-/// use parse_up::{tag, map, UpParser as _, util::yes_and};
+/// use parse_up::{tag, map, util::yes_and};
 ///
 /// assert_eq!(
-///     map(tag("true"), |_| true).parse("true..."),
+///     map(tag("true"), |_| true)("true..."),
 ///     yes_and(true, "..."),
 /// );
 /// ```
@@ -163,12 +164,12 @@ pub fn map<'input, T, U>(
 }
 
 /// ```
-/// use parse_up::{dictionary, followed_by, UpParser as _, util::yes_and};
+/// use parse_up::{dictionary, followed_by, util::yes_and};
 ///
 /// let parser = dictionary([("true", true), ("false", false)]);
 ///
 /// assert_eq!(
-///     followed_by(parser.clone(), parser.clone()).parse("truefalse..."),
+///     followed_by(parser.clone(), parser.clone())("truefalse..."),
 ///     yes_and((true, false), "..."),
 /// );
 /// ```
@@ -193,16 +194,16 @@ pub fn followed_by<'input, L, R>(
 }
 
 /// ```
-/// use parse_up::{dictionary, many1, UpParser as _, util::{yes_and, go_on}};
+/// use parse_up::{dictionary, many1, util::{yes_and, go_on}};
 ///
 /// let parser = dictionary([("true", true), ("false", false)]);
 ///
 /// assert_eq!(
-///     many1(parser.clone()).parse("truefalse..."),
+///     many1(parser.clone())("truefalse..."),
 ///     yes_and(vec![true, false], "..."),
 /// );
 /// assert_eq!(
-///     many1(parser).parse("t"),
+///     many1(parser)("t"),
 ///     go_on(["rue"]),
 /// );
 /// ```
@@ -224,23 +225,23 @@ pub fn many1<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResu
 }
 
 /// ```
-/// use parse_up::{whitespace, UpParser as _, util::{yes_and, go_on, oops}};
+/// use parse_up::{whitespace, util::{yes_and, go_on, oops}};
 ///
 /// assert_eq!(
-///     whitespace.parse(" hello"),
+///     whitespace(" hello"),
 ///     yes_and(" ", "hello"),
 /// );
 /// assert_eq!(
-///     whitespace.parse("    hello"),
+///     whitespace("    hello"),
 ///     yes_and("    ", "hello"),
 /// );
 /// assert_eq!(
-///     whitespace.parse(""),
+///     whitespace(""),
 ///     go_on([" "]),
 /// );
 /// assert_eq!(
-///     whitespace.parse("hello"),
-///     oops("expected whitespace, not hello"),
+///     whitespace("hello"),
+///     oops("hello", "expected whitespace"),
 /// );
 /// ```
 pub fn whitespace(input: &str) -> UpResult<&str> {
