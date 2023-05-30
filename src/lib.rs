@@ -226,6 +226,46 @@ pub fn whitespace(input: &str) -> UpResult<&str> {
     }
 }
 
+/// Returns [`None`] if the inner parser fails, feeding it empty input to get suggestions as required.
+/// ```
+/// use parse_up::{opt, util::{yes_and, yes_and_also}, dictionary};
+///
+/// let parser = opt(dictionary([("true", true), ("false", false)]));
+///
+/// assert_eq!(
+///     parser("true..."),
+///     Ok(yes_and(Some(true), "...")),
+/// );
+///
+/// assert_eq!(
+///     parser("..."),
+///     Ok(yes_and_also(None, "...", ["true", "false"])),
+/// );
+///
+/// ```
+pub fn opt<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResult<Option<T>> {
+    move |input| match parser(input) {
+        Ok(YesAnd {
+            yes,
+            and,
+            could_also,
+        }) => Ok(YesAnd {
+            yes: Some(yes),
+            and,
+            could_also,
+        }),
+        Err(UpError::GoOn { go_on }) if !go_on.is_empty() => Ok(yes_and_also(None, input, go_on)),
+        Err(_) => {
+            let suggestions = if let Err(UpError::GoOn { go_on }) = parser("") {
+                go_on
+            } else {
+                todo!("is this a user bug?")
+            };
+            Ok(yes_and_also(None, input, suggestions))
+        }
+    }
+}
+
 /// Expands to a block which runs a sequence of parsers, one after the other,
 /// returning their results in a tuple.
 /// ```
