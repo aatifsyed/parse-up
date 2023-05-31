@@ -12,6 +12,7 @@ pub mod reedline;
 mod series;
 pub mod util;
 pub use contextless::{dictionary, many1, opt, tag, whitespace};
+pub use one_of::one_of;
 pub use series::series;
 
 pub type UpResult<'input, T> = Result<YesAnd<'input, T>, UpError<'input>>;

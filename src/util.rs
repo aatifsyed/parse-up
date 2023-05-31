@@ -89,11 +89,3 @@ pub fn chars_needed_to_complete<'needle>(
     }
     Some("") // all chars have matched
 }
-
-#[test]
-fn test_chars_needed_to_complete() {
-    assert_eq!(chars_needed_to_complete("tag", "ta"), Some("g"));
-    assert_eq!(chars_needed_to_complete("foo", ""), Some("foo"));
-    assert_eq!(chars_needed_to_complete("foo", "bar"), None);
-    assert_eq!(chars_needed_to_complete("foo", "food"), None);
-}

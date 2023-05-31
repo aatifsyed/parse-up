@@ -1,8 +1,46 @@
-use crate::{util::yes_and, UpParser, UpResult};
+use crate::{
+    util::{go_on, oops, yes_and, yes_and_also},
+    UpError, UpParser, UpResult, YesAnd,
+};
 
+/// Run a sequence of parsers (with the same output type).
+/// Return the first that succeeds.
+/// ```
+/// use parse_up::{tag, one_of, util::{go_on, oops, yes_and, yes_and_also}};
+///
+/// let ctx = &mut ();
+///
+/// assert_eq!(
+///     // all branches are searched
+///     one_of((tag("hello"), tag("world")))("world...", ctx),
+///     Ok(yes_and("world".into(), "...")),
+/// );
+///
+/// assert_eq!(
+///     // suggestions are integrated across branches
+///     one_of((tag("foo"), tag("food")))("foo", ctx),
+///     Ok(yes_and_also("foo".into(), "", ["d"])),
+/// );
+///
+/// assert_eq!(
+///     one_of((tag("hello"), tag("world")))("", ctx),
+///     Err(go_on(["hello", "world"])),
+/// );
+///
+/// assert_eq!(
+///     one_of((tag("hello"), tag("helsinki")))("hel", ctx),
+///     Err(go_on(["lo", "sinki"])),
+/// );
+///
+/// assert_eq!(
+///     // error if no branches match
+///     one_of((tag("foo"), tag("bar")))("baz", ctx),
+///     Err(oops("baz", "no branches matched")),
+/// );
+/// ```
 pub fn one_of<ParserSequenceT, Context>(
     parser_sequence: ParserSequenceT,
-) -> impl for<'input> Fn(&'input str, &mut Context) -> UpResult<'input, ParserSequenceT::SequenceOut>
+) -> impl for<'input> Fn(&'input str, &mut Context) -> UpResult<'input, ParserSequenceT::Output>
 where
     ParserSequenceT: OneOf<Context>,
 {
@@ -10,58 +48,12 @@ where
 }
 
 pub trait OneOf<Context> {
-    type SequenceOut;
+    type Output;
     fn one_of<'input>(
         &self,
         input: &'input str,
         context: &mut Context,
-    ) -> UpResult<'input, Self::SequenceOut>;
+    ) -> UpResult<'input, Self::Output>;
 }
 
-impl<Context, Parser0> OneOf<Context> for (Parser0,)
-where
-    Parser0: UpParser<Context>,
-{
-    type SequenceOut = (Parser0::Output,);
-
-    fn one_of<'input>(
-        &self,
-        mut input: &'input str,
-        context: &mut Context,
-    ) -> UpResult<'input, Self::SequenceOut> {
-        let parsed = ({
-            let (rest, t) = self.0.parse(input, context)?.cont();
-            input = rest;
-            t
-        },);
-        Ok(yes_and(parsed, input))
-    }
-}
-
-impl<Context, Parser0, Parser1> OneOf<Context> for (Parser0, Parser1)
-where
-    Parser0: UpParser<Context>,
-    Parser1: UpParser<Context>,
-{
-    type SequenceOut = (Parser0::Output, Parser1::Output);
-
-    fn one_of<'input>(
-        &self,
-        mut input: &'input str,
-        context: &mut Context,
-    ) -> UpResult<'input, Self::SequenceOut> {
-        let parsed = (
-            {
-                let (rest, t) = self.0.parse(input, context)?.cont();
-                input = rest;
-                t
-            },
-            {
-                let (rest, t) = self.1.parse(input, context)?.cont();
-                input = rest;
-                t
-            },
-        );
-        Ok(yes_and(parsed, input))
-    }
-}
+parse_up_proc_macros::_impl_one_of_for_tuples!();
