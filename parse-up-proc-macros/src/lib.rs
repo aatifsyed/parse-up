@@ -2,8 +2,9 @@ use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::quote;
 use syn::{parse::Nothing, parse_macro_input};
 
+#[doc(hidden)]
 #[proc_macro]
-pub fn impl_series_for_tuples(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn _impl_series_for_tuples(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let _ = parse_macro_input!(item as Nothing);
 
     let impl_blocks = (1..=100)

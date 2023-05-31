@@ -7,87 +7,47 @@ use crate::{
     UpError, UpParser, UpResult, YesAnd,
 };
 
-pub trait ContextlessUpParser<'input> {
-    type Output;
-    fn parse(&self, input: &'input str) -> UpResult<'input, Self::Output>;
-    fn ignoring_context(self) -> IgnoringContext<'input, Self>
-    where
-        Self: Sized,
-    {
-        IgnoringContext(self, Default::default())
-    }
-}
-
-impl<'input, ParserFn, FnOut> ContextlessUpParser<'input> for ParserFn
-where
-    ParserFn: Fn(&'input str) -> UpResult<'input, FnOut>,
-{
-    type Output = FnOut;
-
-    fn parse(&self, input: &'input str) -> UpResult<'input, Self::Output> {
-        self(input)
-    }
-}
-
-pub struct IgnoringContext<'input, T>(T, std::marker::PhantomData<&'input ()>);
-
-impl<'input, AnyContextT, InnerParserT> UpParser<AnyContextT>
-    for IgnoringContext<'input, InnerParserT>
-where
-    InnerParserT: ContextlessUpParser<'input>,
-    Self: 'input,
-{
-    type Output = InnerParserT::Output;
-
-    fn parse(&self, input: &'input str, _: &mut AnyContextT) -> UpResult<'input, Self::Output> {
-        self.0.parse(input)
-    }
-}
-
 /// Takes the string `tag` from the input.
 /// ```
 /// use parse_up::{tag, util::{yes_and, go_on, oops}};
+///
+/// let ctx = &mut ();
+///
 /// assert_eq!(
-///     tag("hello")(""),
+///     tag("hello")("", ctx),
 ///     Err(go_on(["hello"])),
 /// );
 /// assert_eq!(
-///     tag("hello")("hell"),
+///     tag("hello")("hell", ctx),
 ///     Err(go_on(["o"])),
 /// );
 /// assert_eq!(
-///     tag("hello")("hello"),
-///     Ok(yes_and("hello", "")),
+///     tag("hello")("hello", ctx),
+///     Ok(yes_and("hello".into(), "")),
 /// );
 /// assert_eq!(
-///     tag("hello")("hello, world!"),
-///     Ok(yes_and("hello", ", world!")),
+///     tag("hello")("hello, world!", ctx),
+///     Ok(yes_and("hello".into(), ", world!")),
 /// );
 /// assert_eq!(
-///     tag("hello")("world"),
+///     tag("hello")("world", ctx),
 ///     Err(oops("world", "expected hello")),
 /// );
 /// ```
 #[allow(clippy::needless_lifetimes)]
-pub fn tag<'tag>(tag: &'tag str) -> impl for<'input> Fn(&'input str) -> UpResult<&'input str> {
-    let tag = String::from(tag);
-    move |input: &str| match input.strip_prefix(&tag) {
-        Some(rest) => Ok(yes_and(&input[..tag.len()], rest)),
-        None => match chars_needed_to_complete(&tag, input) {
+pub fn tag<'tag, Context>(
+    tag: &'tag str,
+) -> impl for<'input> Fn(&'input str, &mut Context) -> UpResult<'input, String> + 'tag {
+    // the trait solver beat me up and stole my lunch money :(          ^^^^^^
+    move |input, _| match input.strip_prefix(tag) {
+        Some(rest) => Ok(yes_and(String::from(&input[..tag.len()]), rest)),
+        None => match chars_needed_to_complete(tag, input) {
             Some("") => unreachable!("would've been caught in prefix"),
             Some(suggestion) => Err(go_on([suggestion])),
             None => Err(oops(input, format!("expected {tag}"))),
         },
     }
 }
-
-fn assert_fn<T>(_: impl for<'a> Fn(&'a str) -> UpResult<'a, T>) {}
-fn assert_trait<'input>(_: impl ContextlessUpParser<'input>) {}
-const _: () = {
-    fn compiles() {
-        assert_trait(tag("hello"));
-    }
-};
 
 /// ```
 /// use parse_up::{dictionary, util::{yes_and, go_on, oops}};
@@ -99,26 +59,28 @@ const _: () = {
 ///     ("no", false),
 /// ]);
 ///
+/// let ctx = &mut ();
+///
 /// assert_eq!(
-///     parser("true etc"),
+///     parser("true etc", ctx),
 ///     Ok(yes_and(true, " etc")),
 /// );
 /// assert_eq!(
-///     parser(""),
+///     parser("", ctx),
 ///     Err(go_on(["yes", "true", "no", "false"])),
 /// );
 /// assert_eq!(
-///     parser("y"),
+///     parser("y", ctx),
 ///     Err(go_on(["es"])),
 /// );
 /// assert_eq!(
-///     parser("yep"),
+///     parser("yep", ctx),
 ///     Err(oops("yep", "expected one of [yes, true, no, false]")),
 /// );
 /// ```
-pub fn dictionary<KeyT, ValueT>(
+pub fn dictionary<KeyT, ValueT, Context>(
     items: impl IntoIterator<Item = (KeyT, ValueT)>,
-) -> impl Fn(&str) -> UpResult<ValueT> + Clone
+) -> impl for<'input> Fn(&'input str, &mut Context) -> UpResult<'input, ValueT> + Clone
 where
     KeyT: Display,
     ValueT: Clone,
@@ -129,10 +91,20 @@ where
         // largest keys first
         .sorted_by_key(|(k, _v)| std::cmp::Reverse(k.clone()))
         .collect::<Vec<_>>();
-    move |input: &str| {
+    move |input: &str, ctx| {
         let mut suggestions = vec![];
         for (k, v) in &pairs {
-            match map(tag(k), |_| v.clone())(input) {
+            match tag(k)(input, ctx).map(
+                |YesAnd {
+                     yes,
+                     and,
+                     could_also,
+                 }| YesAnd {
+                    yes: v.clone(),
+                    and,
+                    could_also,
+                },
+            ) {
                 Ok(ok) => return Ok(ok),
                 Err(UpError::Oops { .. }) => continue, // try another key
                 Err(UpError::GoOn { go_on }) => suggestions.extend(go_on),
@@ -152,56 +124,33 @@ where
 }
 
 /// ```
-/// use parse_up::{tag, map, util::yes_and};
-///
-/// assert_eq!(
-///     map(tag("true"), |_| true)("true..."),
-///     Ok(yes_and(true, "...")),
-/// );
-/// ```
-pub fn map<'input, T, U>(
-    parser: impl Fn(&'input str) -> UpResult<'input, T>,
-    f: impl Fn(T) -> U,
-) -> impl Fn(&'input str) -> UpResult<U> {
-    move |input: &'input str| {
-        parser(input).map(
-            |YesAnd {
-                 yes,
-                 and,
-                 could_also,
-             }| YesAnd {
-                yes: f(yes),
-                and,
-                could_also,
-            },
-        )
-    }
-}
-
-/// ```
 /// use parse_up::{dictionary, many1, util::{yes_and, go_on}};
 ///
 /// let parser = dictionary([("true", true), ("false", false)]);
 ///
+/// let ctx = &mut ();
+///
 /// assert_eq!(
-///     many1(parser.clone())("truefalse..."),
+///     many1(parser.clone())("truefalse...", ctx),
 ///     Ok(yes_and(vec![true, false], "...")),
 /// );
 /// assert_eq!(
-///     many1(parser)("t"),
+///     many1(parser)("t", ctx),
 ///     Err(go_on(["rue"])),
 /// );
 /// ```
-pub fn many1<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResult<Vec<T>> {
-    move |input: &str| {
+pub fn many1<'input, OutT, Context>(
+    parser: impl UpParser<Context, Output = OutT>,
+) -> impl Fn(&'input str, &mut Context) -> UpResult<'input, Vec<OutT>> {
+    move |input: &str, ctx| {
         let YesAnd {
             yes,
             and,
             could_also,
-        } = parser(input)?;
+        } = parser.parse(input, ctx)?;
         let mut yeses = vec![yes];
         let mut input = and;
-        while let Ok(YesAnd { yes, and, .. }) = parser(input) {
+        while let Ok(YesAnd { yes, and, .. }) = parser.parse(input, ctx) {
             input = and;
             yeses.push(yes);
         }
@@ -212,24 +161,29 @@ pub fn many1<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResu
 /// ```
 /// use parse_up::{whitespace, util::{yes_and, go_on, oops}};
 ///
+/// let ctx = &mut ();
+///
 /// assert_eq!(
-///     whitespace(" hello"),
-///     Ok(yes_and(" ", "hello")),
+///     whitespace(" hello", ctx),
+///     Ok(yes_and(" ".into(), "hello")),
 /// );
 /// assert_eq!(
-///     whitespace("    hello"),
-///     Ok(yes_and("    ", "hello")),
+///     whitespace("    hello", ctx),
+///     Ok(yes_and("    ".into(), "hello")),
 /// );
 /// assert_eq!(
-///     whitespace(""),
+///     whitespace("", ctx),
 ///     Err(go_on([" "])),
 /// );
 /// assert_eq!(
-///     whitespace("hello"),
+///     whitespace("hello", ctx),
 ///     Err(oops("hello", "expected whitespace")),
 /// );
 /// ```
-pub fn whitespace(input: &str) -> UpResult<&str> {
+pub fn whitespace<'input, ContextT>(
+    input: &'input str,
+    context: &mut ContextT,
+) -> UpResult<'input, String> {
     if input.is_empty() {
         return Err(go_on([" "]));
     }
@@ -237,7 +191,7 @@ pub fn whitespace(input: &str) -> UpResult<&str> {
     let bytes_trimmed = input.len() - trimmed.len();
     match bytes_trimmed {
         0 => Err(oops(input, "expected whitespace")),
-        _ => Ok(yes_and(&input[..bytes_trimmed], trimmed)),
+        _ => Ok(yes_and(String::from(&input[..bytes_trimmed]), trimmed)),
     }
 }
 
@@ -247,19 +201,23 @@ pub fn whitespace(input: &str) -> UpResult<&str> {
 ///
 /// let parser = opt(dictionary([("true", true), ("false", false)]));
 ///
+/// let ctx = &mut ();
+///
 /// assert_eq!(
-///     parser("true..."),
+///     parser("true...", ctx),
 ///     Ok(yes_and(Some(true), "...")),
 /// );
 ///
 /// assert_eq!(
-///     parser("..."),
+///     parser("...", ctx),
 ///     Ok(yes_and_also(None, "...", ["true", "false"])),
 /// );
 ///
 /// ```
-pub fn opt<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResult<Option<T>> {
-    move |input| match parser(input) {
+pub fn opt<'input, OutT, Context>(
+    parser: impl UpParser<Context, Output = OutT>,
+) -> impl Fn(&'input str, &mut Context) -> UpResult<'input, Option<OutT>> {
+    move |input, ctx| match parser.parse(input, ctx) {
         Ok(YesAnd {
             yes,
             and,
@@ -271,7 +229,7 @@ pub fn opt<T>(parser: impl Fn(&str) -> UpResult<T>) -> impl Fn(&str) -> UpResult
         }),
         Err(UpError::GoOn { go_on }) if !go_on.is_empty() => Ok(yes_and_also(None, input, go_on)),
         Err(_) => {
-            let suggestions = if let Err(UpError::GoOn { go_on }) = parser("") {
+            let suggestions = if let Err(UpError::GoOn { go_on }) = parser.parse("", ctx) {
                 go_on
             } else {
                 todo!("is this a user bug?")

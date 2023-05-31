@@ -11,6 +11,8 @@ mod one_of;
 pub mod reedline;
 mod series;
 pub mod util;
+pub use contextless::{dictionary, many1, opt, tag, whitespace};
+pub use series::series;
 
 pub type UpResult<'input, T> = Result<YesAnd<'input, T>, UpError<'input>>;
 
@@ -66,6 +68,3 @@ where
         self(input, context)
     }
 }
-
-pub trait UpParserExt<Context>: UpParser<Context> + Sized {}
-impl<T, Context> UpParserExt<Context> for T where T: UpParser<Context> + Sized {}
