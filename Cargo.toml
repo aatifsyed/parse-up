@@ -8,8 +8,10 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+parse-up-proc-macros = { path = "parse-up-proc-macros" }
 anyhow = "1.0.71"
 either = "1.8.1"
+frunk = "0.4.1"
 itertools = "0.10.5"
 reedline = "0.19.1"
 
