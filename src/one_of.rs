@@ -56,4 +56,4 @@ pub trait OneOf<Context> {
     ) -> UpResult<'input, Self::Output>;
 }
 
-parse_up_proc_macros::_impl_one_of_for_tuples!();
+// parse_up_proc_macros::_impl_one_of_for_tuples!();

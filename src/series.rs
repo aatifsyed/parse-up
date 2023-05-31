@@ -34,4 +34,4 @@ pub trait Series<Context> {
     ) -> UpResult<'input, Self::SequenceOut>;
 }
 
-parse_up_proc_macros::_impl_series_for_tuples!();
+// parse_up_proc_macros::_impl_series_for_tuples!();
