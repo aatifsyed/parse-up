@@ -1,4 +1,4 @@
-use crate::{util::yes_and, UpParser, UpResult};
+use crate::{util::yes_and, ContextualUpParser, UpResult};
 
 /// Accepts a tuple of parsers, and returns their results in a tuple.
 /// ```

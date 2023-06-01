@@ -1,6 +1,6 @@
 use crate::{
     util::{go_on, oops, yes_and, yes_and_also},
-    UpError, UpParser, UpResult, YesAnd,
+    ContextualUpParser, UpError, UpResult, YesAnd,
 };
 
 /// Run a sequence of parsers (with the same output type).

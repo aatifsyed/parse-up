@@ -47,15 +47,15 @@ pub enum UpError<'input> {
     GoOn { go_on: Vec<String> },
 }
 
-pub trait UpParser<'input, Context, Output> {
-    fn parse(&self, input: &'input str, ctx: &mut Context) -> UpResult<'input, Output>;
+pub trait ContextualUpParser<'input, Context, Output> {
+    fn parse_contextual(&self, input: &'input str, ctx: &mut Context) -> UpResult<'input, Output>;
 }
 
-impl<'input, Context, Output, ParseFn> UpParser<'input, Context, Output> for ParseFn
+impl<'input, Context, Output, ParseFn> ContextualUpParser<'input, Context, Output> for ParseFn
 where
     ParseFn: Fn(&'input str, &mut Context) -> UpResult<'input, Output>,
 {
-    fn parse(&self, input: &'input str, ctx: &mut Context) -> UpResult<'input, Output> {
+    fn parse_contextual(&self, input: &'input str, ctx: &mut Context) -> UpResult<'input, Output> {
         self(input, ctx)
     }
 }
@@ -89,13 +89,39 @@ impl<'input, Output, Contextless> ContextlessUpParserExt<'input, Output> for Con
 
 pub struct IgnoreContext<Contextless>(pub Contextless);
 
-impl<'input, Context, Output, Contextless> UpParser<'input, Context, Output>
+impl<'input, Context, Output, Contextless> ContextualUpParser<'input, Context, Output>
     for IgnoreContext<Contextless>
 where
     Contextless: ContextlessUpParser<'input, Output>,
 {
-    fn parse(&self, input: &'input str, _: &mut Context) -> UpResult<'input, Output> {
+    fn parse_contextual(&self, input: &'input str, _: &mut Context) -> UpResult<'input, Output> {
         self.0.parse_contextless(input)
+    }
+}
+
+pub trait UpResultExt<'input, T> {
+    fn into_up_result(self) -> UpResult<'input, T>;
+    fn map_yes<U>(self, f: impl FnOnce(T) -> U) -> UpResult<'input, U>
+    where
+        Self: Sized,
+    {
+        self.into_up_result().map(
+            |YesAnd {
+                 yes,
+                 and,
+                 could_also,
+             }| YesAnd {
+                yes: f(yes),
+                and,
+                could_also,
+            },
+        )
+    }
+}
+
+impl<'input, T> UpResultExt<'input, T> for UpResult<'input, T> {
+    fn into_up_result(self) -> UpResult<'input, T> {
+        self
     }
 }
 
@@ -125,25 +151,44 @@ pub fn tag<'tag, 'input>(
     }
 }
 
+pub fn whitespace(input: &str) -> UpResult<&'_ str> {
+    if input.is_empty() {
+        return Err(go_on([" "]));
+    }
+    let trimmed = input.trim_start();
+    let bytes_trimmed = input.len() - trimmed.len();
+    match bytes_trimmed {
+        0 => Err(oops(input, "expected whitespace")),
+        _ => Ok(yes_and(&input[..bytes_trimmed], trimmed)),
+    }
+}
+
 const _: () = {
-    fn assert_impl_up_parser<'input, Context, Output>(_: impl UpParser<'input, Context, Output>) {}
-    fn assert_impl_parser_fn<'input, Context, Output>(
-        _: impl Fn(&'input str, &mut Context) -> UpResult<'input, Output>,
+    fn assert_impl_contextual_up_parser<'input, Context, Output>(
+        _: impl ContextualUpParser<'input, Context, Output>,
     ) {
+    }
+    fn assert_impl_contexual_parser_fn<'input, Context, Output>(
+        f: impl Fn(&'input str, &mut Context) -> UpResult<'input, Output>,
+    ) {
+        assert_impl_contextual_up_parser(f)
     }
     fn assert_impl_contextless_up_parser<'input, Output>(
         _: impl ContextlessUpParser<'input, Output>,
     ) {
     }
     fn assert_impl_contextless_parser_fn<'input, Output>(
-        _: impl Fn(&'input str) -> UpResult<'input, Output>,
+        f: impl Fn(&'input str) -> UpResult<'input, Output>,
     ) {
+        assert_impl_contextless_up_parser(f)
     }
     fn test() {
-        assert_impl_up_parser::<(), _>(tag_ctx("hello"));
-        assert_impl_parser_fn::<(), _>(tag_ctx("hello"));
+        assert_impl_contextual_up_parser::<(), _>(tag_ctx("hello"));
+        assert_impl_contexual_parser_fn::<(), _>(tag_ctx("hello"));
         assert_impl_contextless_parser_fn(tag("hello"));
         assert_impl_contextless_up_parser(tag("hello"));
-        assert_impl_up_parser::<(), _>(tag("hello").ignore_context())
+        assert_impl_contextual_up_parser::<(), _>(tag("hello").ignore_context());
+        assert_impl_contextless_parser_fn(whitespace);
+        whitespace.ignore_context();
     }
 };
