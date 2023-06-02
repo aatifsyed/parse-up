@@ -15,14 +15,14 @@
 	// 	],
 	// 	"description": "Log output to console"
 	// }
-	"common params": {
-		"scope": "rust",
-		"prefix": "'input",
-		"body": "'input, Context, Output"
-	},
-	"common signature": {
-		"scope": "rust",
-		"prefix": "impl Fn",
-		"body": "impl Fn(&'input str, &mut Context) -> UpResult<'input, ${1:Output}>"
-	}
+	// "common params": {
+	// 	"scope": "rust",
+	// 	"prefix": "'input",
+	// 	"body": "'input, Context, Output"
+	// },
+	// "common signature": {
+	// 	"scope": "rust",
+	// 	"prefix": "impl Fn",
+	// 	"body": "impl Fn(&'input str, &mut Context) -> UpResult<'input, ${1:Output}>"
+	// }
 }
