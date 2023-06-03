@@ -76,19 +76,19 @@ pub fn _impl_contextless_one_of_parser_sequence_for_tuples(
     arg.into_iter()
         .map(|num_tuples| {
             // Parser0, Parser1 ...
-            let member_idents = (0..num_tuples)
+            let parser_ty_param = (0..num_tuples)
                 .map(|n| Ident::new(&format!("Parser{n}"), Span::call_site()))
                 .collect::<Vec<_>>();
             let tuple_ix = (0..num_tuples).map(Literal::usize_unsuffixed);
             quote! {
                 impl<'input, Out,
-                    #(#member_idents,)*
+                    #(#parser_ty_param,)*
                     > ContextlessOneOfParserSequence<'input, Out>
                     for (
-                        #(#member_idents,)*
+                        #(#parser_ty_param,)*
                     )
                 where
-                    #(#member_idents: ContextlessUpParser<'input, Out>,)*
+                    #(#parser_ty_param: ContextlessUpParser<'input, Out>,)*
                 {
                     fn contextless_one_of(
                         &self,
@@ -128,20 +128,20 @@ pub fn _impl_contextual_one_of_parser_sequence_for_tuples(
     arg.into_iter()
         .map(|num_tuples| {
             // Parser0, Parser1 ...
-            let member_idents = (0..num_tuples)
+            let parser_ty_param = (0..num_tuples)
                 .map(|n| Ident::new(&format!("Parser{n}"), Span::call_site()))
                 .collect::<Vec<_>>();
             let tuple_ix = (0..num_tuples).map(Literal::usize_unsuffixed);
             quote! {
                 impl<'input, Out, Ctx,
-                    #(#member_idents,)*
+                    #(#parser_ty_param,)*
                     >
                     ContextualOneOfParserSequence<'input, Out, Ctx>
                     for (
-                        #(#member_idents,)*
+                        #(#parser_ty_param,)*
                     )
                 where
-                    #(#member_idents: ContextualUpParser<'input, Out, Ctx>,)*
+                    #(#parser_ty_param: ContextualUpParser<'input, Out, Ctx>,)*
                 {
                     fn contextual_one_of(
                         &self,
@@ -168,6 +168,66 @@ pub fn _impl_contextual_one_of_parser_sequence_for_tuples(
                             true => Err(oops(input, "no branches could continue").ctx(ctx)),
                             false => Err(go_on(all_go_ons).ctx(ctx)),
                         }
+                    }
+                }
+            }
+        })
+        .collect::<TokenStream>()
+        .into()
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn _impl_contextless_series_parser_sequence_for_tuples(
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let arg = parse_macro_input!(item as RangeArg);
+
+    arg.into_iter()
+        .map(|num_tuples| {
+            // Parser0, Parser1 ...
+            let parser_ty_param = (0..num_tuples)
+                .map(|n| Ident::new(&format!("Parser{n}"), Span::call_site()))
+                .collect::<Vec<_>>();
+            // Out0, Out1 ...
+            let out_ty_param = (0..num_tuples)
+                .map(|n| Ident::new(&format!("Out{n}"), Span::call_site()))
+                .collect::<Vec<_>>();
+            let parser_bound = parser_ty_param.iter().zip(out_ty_param.iter()).map(|(parser_ty_param, out_ty_param)|{
+                quote!{ #parser_ty_param: ContextlessUpParser<'input, #out_ty_param> }
+            });
+            let tuple_ix = (0..num_tuples).map(Literal::usize_unsuffixed);
+            quote! {
+                impl<'input,
+                    #(#parser_ty_param,)*
+                    #(#out_ty_param,)*
+                    >
+                    ContextlessSeriesParserSequence<'input, (
+                        #(#out_ty_param,)*
+                    )> for (
+                        #(#parser_ty_param,)*
+                    )
+                where
+                    #(#parser_bound,)*
+                {
+                    fn contextless_series(
+                        &self,
+                        mut input: &'input str,
+                    ) -> ContextlessUpResult<'input, (
+                        #(#out_ty_param,)*
+                    )> {
+                        let mut final_could_also = Vec::new();
+                        let yeses = (
+                            #({
+                                let YesAnd {
+                                    yes, and, could_also, ctx: _
+                                } = self.#tuple_ix.parse_contextless(input)?;
+                                input = and;
+                                final_could_also = could_also;
+                                yes
+                            },)*
+                        );
+                        Ok(yes_and(yeses, input).no_ctx())
                     }
                 }
             }

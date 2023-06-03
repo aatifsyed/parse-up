@@ -1,37 +1,149 @@
-// use crate::{util::yes_and, ContextualUpParser, UpResult};
+use crate::{
+    util::{go_on, oops, yes_and},
+    ContextlessUpParser, ContextlessUpResult, ContextualUpParser, UpError,
+    UpResult, YesAnd,
+};
 
-// /// Accepts a tuple of parsers, and returns their results in a tuple.
-// /// ```
-// /// use parse_up::{series, tag, whitespace, util::{yes_and, go_on}};
-// ///
-// /// let ctx = &mut ();
-// ///
-// /// assert_eq!(
-// ///     series((tag("hello"), whitespace, tag("world")))("hello world...", ctx),
-// ///     Ok(yes_and(("hello".into(), " ".into(), "world".into()), "...")),
-// /// );
-// ///
-// /// assert_eq!(
-// ///     series((tag("hello"), whitespace, tag("world")))("hello", ctx),
-// ///     Err(go_on([" "])),
-// /// );
-// /// ```
-// pub fn series<Context, ParserSequenceT>(
-//     parser_sequence: ParserSequenceT,
-// ) -> impl for<'input> Fn(&'input str, &mut Context) -> UpResult<'input, ParserSequenceT::SequenceOut>
-// where
-//     ParserSequenceT: Series<Context>,
-// {
-//     move |input, context| parser_sequence.sequence(input, context)
-// }
+pub fn series<ParserSequence>(
+    parsers: ParserSequence,
+) -> Series<ParserSequence> {
+    Series(parsers)
+}
 
-// pub trait Series<Context> {
-//     type SequenceOut;
-//     fn sequence<'input>(
-//         &self,
-//         input: &'input str,
-//         context: &mut Context,
-//     ) -> UpResult<'input, Self::SequenceOut>;
-// }
+pub struct Series<ParserSequence>(ParserSequence);
 
-// // parse_up_proc_macros::_impl_series_for_tuples!();
+trait ContextlessSeriesParserSequence<'input, Out> {
+    fn contextless_series(
+        &self,
+        input: &'input str,
+    ) -> ContextlessUpResult<'input, Out>;
+}
+trait ContextualSeriesParserSequence<'input, Out, Ctx> {
+    fn contextual_series(
+        &self,
+        input: &'input str,
+        ctx: Ctx,
+    ) -> UpResult<'input, Out, Ctx>;
+}
+
+impl<'input, Out, ParserSequence> ContextlessUpParser<'input, Out>
+    for Series<ParserSequence>
+where
+    ParserSequence: ContextlessSeriesParserSequence<'input, Out>,
+{
+    fn parse_contextless(
+        &self,
+        input: &'input str,
+    ) -> ContextlessUpResult<'input, Out> {
+        self.0.contextless_series(input)
+    }
+}
+
+impl<'input, Out, Ctx, ParserSequence> ContextualUpParser<'input, Out, Ctx>
+    for Series<ParserSequence>
+where
+    ParserSequence: ContextualSeriesParserSequence<'input, Out, Ctx>,
+{
+    fn parse_contextual(
+        &self,
+        input: &'input str,
+        ctx: Ctx,
+    ) -> UpResult<'input, Out, Ctx> {
+        self.0.contextual_series(input, ctx)
+    }
+}
+
+impl<'input, Out0, Parser0> ContextlessSeriesParserSequence<'input, (Out0,)>
+    for (Parser0,)
+where
+    Parser0: ContextlessUpParser<'input, Out0>,
+{
+    fn contextless_series(
+        &self,
+        mut input: &'input str,
+    ) -> ContextlessUpResult<'input, (Out0,)> {
+        let mut final_could_also = Vec::new();
+        let yeses = ({
+            let YesAnd {
+                yes,
+                and,
+                could_also,
+                ctx: _,
+            } = self.0.parse_contextless(input)?;
+            input = and;
+            final_could_also = could_also;
+            yes
+        },);
+        Ok(yes_and(yeses, input).no_ctx())
+    }
+}
+
+impl<'input, Out0, Parser0, Out1, Parser1>
+    ContextlessSeriesParserSequence<'input, (Out0, Out1)> for (Parser0, Parser1)
+where
+    Parser0: ContextlessUpParser<'input, Out0>,
+    Parser1: ContextlessUpParser<'input, Out1>,
+{
+    fn contextless_series(
+        &self,
+        mut input: &'input str,
+    ) -> ContextlessUpResult<'input, (Out0, Out1)> {
+        let mut final_could_also = Vec::new();
+        let yeses = (
+            {
+                let YesAnd {
+                    yes,
+                    and,
+                    could_also,
+                    ctx: _,
+                } = self.0.parse_contextless(input)?;
+                input = and;
+                final_could_also = could_also;
+                yes
+            },
+            {
+                let YesAnd {
+                    yes,
+                    and,
+                    could_also,
+                    ctx: _,
+                } = self.1.parse_contextless(input)?;
+                input = and;
+                final_could_also = could_also;
+                yes
+            },
+        );
+        Ok(yes_and(yeses, input).no_ctx())
+    }
+}
+
+parse_up_proc_macros::_impl_contextless_series_parser_sequence_for_tuples!(
+    3..4
+);
+
+#[cfg(test)]
+mod tests {
+    use crate::contextless::{tag, whitespace};
+
+    use super::*;
+    #[test]
+    fn contextless() {
+        let hello_world = series((tag("hello"), whitespace, tag("world")));
+        assert_eq!(
+            hello_world.parse_contextless(""),
+            Err(go_on(["hello"]).no_ctx()),
+        );
+        assert_eq!(
+            hello_world.parse_contextless("hello"),
+            Err(go_on([" "]).no_ctx())
+        );
+        assert_eq!(
+            hello_world.parse_contextless("hello "),
+            Err(go_on(["world"]).no_ctx())
+        );
+        assert_eq!(
+            hello_world.parse_contextless("hello world..."),
+            Ok(yes_and(("hello", " ", "world"), "...").no_ctx())
+        );
+    }
+}
