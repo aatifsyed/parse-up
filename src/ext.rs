@@ -8,6 +8,11 @@ use crate::{
 pub struct IgnoreContext<T>(T);
 pub struct MapYes<Parser, MapFn, Out>(Parser, MapFn, PhantomData<Out>);
 
+// Can't impl<T: Parser> Parser for &T because it will conflict with the implementation for Fn
+// So make our own wrapper.
+#[derive(Clone, Copy)]
+pub struct BorrowedParser<'a, T>(&'a T);
+
 pub trait ContextlessUpParserExt<'input, Out>:
     ContextlessUpParser<'input, Out>
 {
@@ -24,6 +29,12 @@ pub trait ContextlessUpParserExt<'input, Out>:
     {
         MapYes(self, f, PhantomData)
     }
+    fn borrowed(&self) -> BorrowedParser<Self>
+    where
+        Self: Sized,
+    {
+        BorrowedParser(self)
+    }
 }
 
 impl<'input, Out, Out2, Parser, MapFn> ContextlessUpParser<'input, Out2>
@@ -37,6 +48,19 @@ where
         input: &'input str,
     ) -> ContextlessUpResult<'input, Out2> {
         Ok(self.0.parse_contextless(input)?.map_yes(&self.1))
+    }
+}
+
+impl<'borrowed, 'input, Out, Parser> ContextlessUpParser<'input, Out>
+    for BorrowedParser<'borrowed, Parser>
+where
+    Parser: ContextlessUpParser<'input, Out>,
+{
+    fn parse_contextless(
+        &self,
+        input: &'input str,
+    ) -> ContextlessUpResult<'input, Out> {
+        self.0.parse_contextless(input)
     }
 }
 

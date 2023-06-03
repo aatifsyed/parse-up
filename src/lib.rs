@@ -8,6 +8,7 @@ use util::{chars_needed_to_complete, go_on, oops, yes_and};
 mod contextless;
 mod ext;
 mod one_of;
+mod permute;
 mod series;
 pub mod util;
 

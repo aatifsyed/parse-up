@@ -24,11 +24,9 @@ pub mod assert {
         contextless_up_parser(f)
     }
 }
-
 pub fn assert_contextless_up_parser<'input, Out>(
     _: impl ContextlessUpParser<'input, Out>,
 ) {
-    pub fn foo() {}
 }
 pub fn assert_contextless_parser_fn<'input, Out>(
     f: impl Fn(&'input str) -> ContextlessUpResult<'input, Out>,

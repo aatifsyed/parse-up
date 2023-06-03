@@ -115,7 +115,7 @@ where
 }
 
 parse_up_proc_macros::_impl_contextless_one_of_parser_sequence_for_tuples!(
-    3..4
+    3..10
 );
 
 impl<'input, Out, Ctx, Parser0> ContextualOneOfParserSequence<'input, Out, Ctx>
