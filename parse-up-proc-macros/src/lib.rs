@@ -227,7 +227,71 @@ pub fn _impl_contextless_series_parser_sequence_for_tuples(
                                 yes
                             },)*
                         );
-                        Ok(yes_and(yeses, input).no_ctx())
+                        Ok(yes_and(yeses, input).also(final_could_also).no_ctx())
+                    }
+                }
+            }
+        })
+        .collect::<TokenStream>()
+        .into()
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn _impl_contextual_series_parser_sequence_for_tuples(
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let arg = parse_macro_input!(item as RangeArg);
+
+    arg.into_iter()
+        .map(|num_tuples| {
+            // Parser0, Parser1 ...
+            let parser_ty_param = (0..num_tuples)
+                .map(|n| Ident::new(&format!("Parser{n}"), Span::call_site()))
+                .collect::<Vec<_>>();
+            // Out0, Out1 ...
+            let out_ty_param = (0..num_tuples)
+                .map(|n| Ident::new(&format!("Out{n}"), Span::call_site()))
+                .collect::<Vec<_>>();
+            let parser_bound = parser_ty_param.iter().zip(out_ty_param.iter()).map(|(parser_ty_param, out_ty_param)|{
+                quote!{ #parser_ty_param: ContextualUpParser<'input, #out_ty_param, Ctx> }
+            });
+            let tuple_ix = (0..num_tuples).map(Literal::usize_unsuffixed);
+            quote! {
+                impl<'input, Ctx,
+                    #(#parser_ty_param,)*
+                    #(#out_ty_param,)*
+                    >
+                    ContextualSeriesParserSequence<'input, (
+                        #(#out_ty_param,)*
+                    ), Ctx>
+                    for (
+                        #(#parser_ty_param,)*
+                    )
+                where
+                    #(#parser_bound,)*
+                {
+                    fn contextual_series(
+                        &self,
+                        mut input: &'input str,
+                        mut ctx: Ctx,
+                    ) -> UpResult<'input, (
+                        #(#out_ty_param,)*
+                    ), Ctx> {
+                        let mut final_could_also = Vec::new();
+                        let yeses = (#({
+                            let YesAnd {
+                                yes,
+                                and,
+                                could_also,
+                                ctx: new_ctx,
+                            } = self.#tuple_ix.parse_contextual(input, ctx)?;
+                            input = and;
+                            ctx = new_ctx;
+                            final_could_also = could_also;
+                            yes
+                        },)*);
+                        Ok(yes_and(yeses, input).also(final_could_also).ctx(ctx))
                     }
                 }
             }

@@ -74,7 +74,7 @@ where
             final_could_also = could_also;
             yes
         },);
-        Ok(yes_and(yeses, input).no_ctx())
+        Ok(yes_and(yeses, input).also(final_could_also).no_ctx())
     }
 }
 
@@ -113,13 +113,85 @@ where
                 yes
             },
         );
-        Ok(yes_and(yeses, input).no_ctx())
+        Ok(yes_and(yeses, input).also(final_could_also).no_ctx())
     }
 }
 
 parse_up_proc_macros::_impl_contextless_series_parser_sequence_for_tuples!(
     3..4
 );
+
+impl<'input, Ctx, Parser0, Out0>
+    ContextualSeriesParserSequence<'input, (Out0,), Ctx> for (Parser0,)
+where
+    Parser0: ContextualUpParser<'input, Out0, Ctx>,
+{
+    fn contextual_series(
+        &self,
+        mut input: &'input str,
+        mut ctx: Ctx,
+    ) -> UpResult<'input, (Out0,), Ctx> {
+        let mut final_could_also = Vec::new();
+        let yeses = ({
+            let YesAnd {
+                yes,
+                and,
+                could_also,
+                ctx: new_ctx,
+            } = self.0.parse_contextual(input, ctx)?;
+            input = and;
+            ctx = new_ctx;
+            final_could_also = could_also;
+            yes
+        },);
+        Ok(yes_and(yeses, input).also(final_could_also).ctx(ctx))
+    }
+}
+
+impl<'input, Ctx, Parser0, Parser1, Out0, Out1>
+    ContextualSeriesParserSequence<'input, (Out0, Out1), Ctx>
+    for (Parser0, Parser1)
+where
+    Parser0: ContextualUpParser<'input, Out0, Ctx>,
+    Parser1: ContextualUpParser<'input, Out1, Ctx>,
+{
+    fn contextual_series(
+        &self,
+        mut input: &'input str,
+        mut ctx: Ctx,
+    ) -> UpResult<'input, (Out0, Out1), Ctx> {
+        let mut final_could_also = Vec::new();
+        let yeses = (
+            {
+                let YesAnd {
+                    yes,
+                    and,
+                    could_also,
+                    ctx: new_ctx,
+                } = self.0.parse_contextual(input, ctx)?;
+                input = and;
+                ctx = new_ctx;
+                final_could_also = could_also;
+                yes
+            },
+            {
+                let YesAnd {
+                    yes,
+                    and,
+                    could_also,
+                    ctx: new_ctx,
+                } = self.1.parse_contextual(input, ctx)?;
+                input = and;
+                ctx = new_ctx;
+                final_could_also = could_also;
+                yes
+            },
+        );
+        Ok(yes_and(yeses, input).also(final_could_also).ctx(ctx))
+    }
+}
+
+parse_up_proc_macros::_impl_contextual_series_parser_sequence_for_tuples!(3..4);
 
 #[cfg(test)]
 mod tests {
