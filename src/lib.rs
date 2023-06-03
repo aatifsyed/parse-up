@@ -69,24 +69,24 @@ where
     }
 }
 
-pub trait ContextualUpParser<'input, Out, Ctx> {
+pub trait ContextualUpParser<'input, Out, Ctx, MapCtx = Ctx> {
     fn parse_contextual(
         &self,
         input: &'input str,
         ctx: Ctx,
-    ) -> UpResult<'input, Out, Ctx>;
+    ) -> UpResult<'input, Out, MapCtx>;
 }
 
-impl<'input, ParserFn, Out, Ctx> ContextualUpParser<'input, Out, Ctx>
-    for ParserFn
+impl<'input, ParserFn, Out, Ctx, MapCtx>
+    ContextualUpParser<'input, Out, Ctx, MapCtx> for ParserFn
 where
-    ParserFn: Fn(&'input str, Ctx) -> UpResult<'input, Out, Ctx>,
+    ParserFn: Fn(&'input str, Ctx) -> UpResult<'input, Out, MapCtx>,
 {
     fn parse_contextual(
         &self,
         input: &'input str,
         ctx: Ctx,
-    ) -> UpResult<'input, Out, Ctx> {
+    ) -> UpResult<'input, Out, MapCtx> {
         self(input, ctx)
     }
 }

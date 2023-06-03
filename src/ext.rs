@@ -39,10 +39,10 @@ pub trait UpResultExt<'input, Out, Ctx> {
 impl<'input, Out, Ctx> UpResultExt<'input, Out, Ctx>
     for UpResult<'input, Out, Ctx>
 {
-    fn map_ctx<NewCtx>(
+    fn map_ctx<MapCtx>(
         self,
-        f: impl FnOnce(Ctx) -> NewCtx,
-    ) -> UpResult<'input, Out, NewCtx> {
+        f: impl FnOnce(Ctx) -> MapCtx,
+    ) -> UpResult<'input, Out, MapCtx> {
         match self {
             Ok(YesAnd {
                 yes,
