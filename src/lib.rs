@@ -1,16 +1,14 @@
-#![allow(unused)]
-use std::{fmt::Display, process::Output};
-
-use itertools::Itertools;
-
-use util::{chars_needed_to_complete, go_on, oops, yes_and};
-
 mod contextless;
 mod ext;
 mod one_of;
 mod permute;
 mod series;
 pub mod util;
+pub use contextless::{tag, whitespace};
+pub use ext::{ContextlessUpParserExt, UpResultExt};
+pub use one_of::one_of;
+pub use permute::permute;
+pub use series::series;
 
 pub type UpResult<'input, Out, Ctx> =
     Result<YesAnd<'input, Out, Ctx>, UpError<'input, Ctx>>;

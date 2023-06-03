@@ -1,7 +1,7 @@
+#![allow(unused_assignments)] // BUG?(aatifsyed)
 use crate::{
-    util::{go_on, oops, yes_and},
-    ContextlessUpParser, ContextlessUpResult, ContextualUpParser, UpError,
-    UpResult, YesAnd,
+    util::yes_and, ContextlessUpParser, ContextlessUpResult,
+    ContextualUpParser, UpResult, YesAnd,
 };
 
 pub fn series<ParserSequence>(
@@ -195,7 +195,10 @@ parse_up_proc_macros::_impl_contextual_series_parser_sequence_for_tuples!(3..4);
 
 #[cfg(test)]
 mod tests {
-    use crate::contextless::{tag, whitespace};
+    use crate::{
+        contextless::{tag, whitespace},
+        util::go_on,
+    };
 
     use super::*;
     #[test]

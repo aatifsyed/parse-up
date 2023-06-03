@@ -1,7 +1,7 @@
 use crate::{
     util::{
-        assert_contextless_parser_fn, assert_contextless_up_parser,
-        chars_needed_to_complete, go_on, oops, yes_and,
+        assert_contextless_parser_fn, chars_needed_to_complete, go_on, oops,
+        yes_and,
     },
     ContextlessUpResult,
 };

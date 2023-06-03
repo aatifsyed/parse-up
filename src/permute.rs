@@ -1,7 +1,6 @@
 use crate::{
     ext::ContextlessUpParserExt, one_of::one_of, series::series,
     ContextlessUpParser, ContextlessUpResult, ContextualUpParser, UpResult,
-    YesAnd,
 };
 
 pub fn permute<ParserSequence>(
@@ -60,7 +59,7 @@ where
 {
     fn contextless_permute(
         &self,
-        mut input: &'input str,
+        input: &'input str,
     ) -> ContextlessUpResult<'input, (Out0,)> {
         one_of((series((self.0.borrowed(),)).map_yes(|(yes0,)| (yes0,)),))
             .parse_contextless(input)
@@ -76,7 +75,7 @@ where
 {
     fn contextless_permute(
         &self,
-        mut input: &'input str,
+        input: &'input str,
     ) -> ContextlessUpResult<'input, (Out0, Out1)> {
         one_of((
             series((self.0.borrowed(), self.1.borrowed()))
@@ -98,7 +97,7 @@ where
 {
     fn contextless_permute(
         &self,
-        mut input: &'input str,
+        input: &'input str,
     ) -> ContextlessUpResult<'input, (Out0, Out1, Out2)> {
         one_of((
             series((
