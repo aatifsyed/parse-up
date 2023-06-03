@@ -1,8 +1,12 @@
+use std::marker::PhantomData;
+
 use crate::{
-    ContextlessUpParser, ContextualUpParser, UpError, UpResult, YesAnd,
+    ContextlessUpParser, ContextlessUpResult, ContextualUpParser, UpError,
+    UpResult, YesAnd,
 };
 
 pub struct IgnoreContext<T>(T);
+pub struct MapYes<Parser, MapFn, Out>(Parser, MapFn, PhantomData<Out>);
 
 pub trait ContextlessUpParserExt<'input, Out>:
     ContextlessUpParser<'input, Out>
@@ -13,6 +17,32 @@ pub trait ContextlessUpParserExt<'input, Out>:
     {
         IgnoreContext(self)
     }
+    fn map_yes<Out2, MapFn>(self, f: MapFn) -> MapYes<Self, MapFn, Out>
+    where
+        Self: Sized,
+        MapFn: Fn(Out) -> Out2,
+    {
+        MapYes(self, f, PhantomData)
+    }
+}
+
+impl<'input, Out, Out2, Parser, MapFn> ContextlessUpParser<'input, Out2>
+    for MapYes<Parser, MapFn, Out>
+where
+    Parser: ContextlessUpParser<'input, Out>,
+    MapFn: Fn(Out) -> Out2,
+{
+    fn parse_contextless(
+        &self,
+        input: &'input str,
+    ) -> ContextlessUpResult<'input, Out2> {
+        Ok(self.0.parse_contextless(input)?.map_yes(&self.1))
+    }
+}
+
+impl<'input, Out, T> ContextlessUpParserExt<'input, Out> for T where
+    T: ContextlessUpParser<'input, Out>
+{
 }
 
 impl<'input, Out, Ctx, T> ContextualUpParser<'input, Out, Ctx>
@@ -30,19 +60,42 @@ where
 }
 
 pub trait UpResultExt<'input, Out, Ctx> {
-    fn map_ctx<NewCtx>(
+    fn map_yes<Out2>(
         self,
-        f: impl FnOnce(Ctx) -> NewCtx,
-    ) -> UpResult<'input, Out, NewCtx>;
+        f: impl FnOnce(Out) -> Out2,
+    ) -> UpResult<'input, Out2, Ctx>;
+    fn map_ctx<Ctx2>(
+        self,
+        f: impl FnOnce(Ctx) -> Ctx2,
+    ) -> UpResult<'input, Out, Ctx2>;
 }
 
 impl<'input, Out, Ctx> UpResultExt<'input, Out, Ctx>
     for UpResult<'input, Out, Ctx>
 {
-    fn map_ctx<MapCtx>(
+    fn map_yes<Out2>(
         self,
-        f: impl FnOnce(Ctx) -> MapCtx,
-    ) -> UpResult<'input, Out, MapCtx> {
+        f: impl FnOnce(Out) -> Out2,
+    ) -> UpResult<'input, Out2, Ctx> {
+        match self {
+            Ok(YesAnd {
+                yes,
+                and,
+                could_also,
+                ctx,
+            }) => Ok(YesAnd {
+                yes: f(yes),
+                and,
+                could_also,
+                ctx,
+            }),
+            Err(e) => Err(e),
+        }
+    }
+    fn map_ctx<Ctx2>(
+        self,
+        f: impl FnOnce(Ctx) -> Ctx2,
+    ) -> UpResult<'input, Out, Ctx2> {
         match self {
             Ok(YesAnd {
                 yes,
@@ -68,5 +121,27 @@ impl<'input, Out, Ctx> UpResultExt<'input, Out, Ctx>
                 ctx: f(ctx),
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{contextless::tag, one_of::one_of, util::yes_and};
+
+    use super::*;
+    #[test]
+    fn test() {
+        let bool = one_of((
+            tag("true").map_yes(|_| true),
+            tag("false").map_yes(|_| false),
+        ));
+        assert_eq!(
+            bool.parse_contextless("true..."),
+            Ok(yes_and(true, "...").no_ctx()),
+        );
+        assert_eq!(
+            bool.parse_contextless("false..."),
+            Ok(yes_and(false, "...").no_ctx()),
+        );
     }
 }
