@@ -4,7 +4,7 @@ mod one_of;
 mod permute;
 mod series;
 pub mod util;
-pub use contextless::{tag, whitespace};
+pub use contextless::{bool, tag, whitespace};
 pub use ext::{ContextlessUpParserExt, UpResultExt};
 pub use one_of::one_of;
 pub use permute::permute;

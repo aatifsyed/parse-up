@@ -1,9 +1,10 @@
 use crate::{
+    one_of,
     util::{
         assert_contextless_parser_fn, chars_needed_to_complete, go_on, oops,
         yes_and,
     },
-    ContextlessUpResult,
+    ContextlessUpParser, ContextlessUpParserExt, ContextlessUpResult,
 };
 
 pub fn tag<'tag, 'input>(
@@ -42,3 +43,11 @@ const _: () = {
         assert_contextless_parser_fn(whitespace);
     }
 };
+
+pub fn bool(input: &str) -> ContextlessUpResult<bool> {
+    one_of((
+        tag("true").map_yes(|_| true),
+        tag("false").map_yes(|_| false),
+    ))
+    .parse_contextless(input)
+}
