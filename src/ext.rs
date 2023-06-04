@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use crate::{
-    ContextlessUpParser, ContextlessUpResult, ContextualUpParser, UpError,
-    UpResult, YesAnd,
+    series, ContextlessUpParser, ContextlessUpResult, ContextualUpParser,
+    UpError, UpResult, YesAnd,
 };
 
 pub struct IgnoreContext<T>(T);
@@ -12,6 +12,7 @@ pub struct MapYes<Parser, MapFn, Out>(Parser, MapFn, PhantomData<Out>);
 // So make our own wrapper.
 #[derive(Clone, Copy)]
 pub struct BorrowedParser<'a, T>(&'a T);
+pub struct FollowedBy<Parser, Next>(Parser, Next);
 
 pub trait ContextlessUpParserExt<'input, Out>:
     ContextlessUpParser<'input, Out>
@@ -35,6 +36,26 @@ pub trait ContextlessUpParserExt<'input, Out>:
     {
         BorrowedParser(self)
     }
+    fn followed_by<Next>(self, next: Next) -> FollowedBy<Self, Next>
+    where
+        Self: Sized,
+    {
+        FollowedBy(self, next)
+    }
+}
+
+impl<'input, Out0, Out1, Parser0, Parser1>
+    ContextlessUpParser<'input, (Out0, Out1)> for FollowedBy<Parser0, Parser1>
+where
+    Parser0: ContextlessUpParser<'input, Out0>,
+    Parser1: ContextlessUpParser<'input, Out1>,
+{
+    fn parse_contextless(
+        &self,
+        input: &'input str,
+    ) -> ContextlessUpResult<'input, (Out0, Out1)> {
+        series((self.0.borrowed(), self.1.borrowed())).parse_contextless(input)
+    }
 }
 
 impl<'input, Out, Out2, Parser, MapFn> ContextlessUpParser<'input, Out2>
@@ -50,6 +71,20 @@ where
         Ok(self.0.parse_contextless(input)?.map_yes(&self.1))
     }
 }
+impl<'input, Out, Out2, Parser, MapFn, Ctx>
+    ContextualUpParser<'input, Out2, Ctx> for MapYes<Parser, MapFn, Out>
+where
+    Parser: ContextualUpParser<'input, Out, Ctx>,
+    MapFn: Fn(Out) -> Out2,
+{
+    fn parse_contextual(
+        &self,
+        input: &'input str,
+        ctx: Ctx,
+    ) -> UpResult<'input, Out2, Ctx> {
+        Ok(self.0.parse_contextual(input, ctx)?.map_yes(&self.1))
+    }
+}
 
 impl<'borrowed, 'input, Out, Parser> ContextlessUpParser<'input, Out>
     for BorrowedParser<'borrowed, Parser>
@@ -61,6 +96,19 @@ where
         input: &'input str,
     ) -> ContextlessUpResult<'input, Out> {
         self.0.parse_contextless(input)
+    }
+}
+impl<'borrowed, 'input, Out, Parser, Ctx> ContextualUpParser<'input, Out, Ctx>
+    for BorrowedParser<'borrowed, Parser>
+where
+    Parser: ContextualUpParser<'input, Out, Ctx>,
+{
+    fn parse_contextual(
+        &self,
+        input: &'input str,
+        ctx: Ctx,
+    ) -> UpResult<'input, Out, Ctx> {
+        self.0.parse_contextual(input, ctx)
     }
 }
 
