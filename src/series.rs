@@ -1,8 +1,12 @@
-#![allow(unused_assignments)] // BUG?(aatifsyed)
+#![allow(unused_assignments, clippy::let_unit_value)]
 use crate::{
-    util::yes_and, ContextlessUpParser, ContextlessUpResult,
-    ContextualUpParser, UpResult, YesAnd,
+    util::yes_and,
+    ContextlessUpParser, ContextlessUpResult, ContextualUpParser,
+    Suggestions::{self, Closed, Open},
+    UpResult, YesAnd,
 };
+
+use std::iter::once;
 
 pub fn series<ParserSequence>(
     parsers: ParserSequence,
@@ -53,28 +57,20 @@ where
     }
 }
 
-impl<'input, Out0, Parser0> ContextlessSeriesParserSequence<'input, (Out0,)>
-    for (Parser0,)
-where
-    Parser0: ContextlessUpParser<'input, Out0>,
-{
-    fn contextless_series(
-        &self,
-        mut input: &'input str,
-    ) -> ContextlessUpResult<'input, (Out0,)> {
-        let mut final_could_also = Vec::new();
-        let yeses = ({
-            let YesAnd {
-                yes,
-                and,
-                could_also,
-                ctx: _,
-            } = self.0.parse_contextless(input)?;
-            input = and;
-            final_could_also = could_also;
-            yes
-        },);
-        Ok(yes_and(yeses, input).also(final_could_also).no_ctx())
+fn finalize_suggestions<T, Ctx>(
+    final_suggestions: Option<Suggestions>,
+    yeses: T,
+    input: &str,
+    ctx: Ctx,
+) -> YesAnd<T, Ctx> {
+    match final_suggestions {
+        None => yes_and(yeses, input).ctx(ctx),
+        Some(Open(suggestions)) => {
+            yes_and(yeses, input).open(suggestions).ctx(ctx)
+        }
+        Some(Closed(first, rest)) => yes_and(yeses, input)
+            .closed(once(first).chain(rest))
+            .ctx(ctx),
     }
 }
 
@@ -88,17 +84,19 @@ where
         &self,
         mut input: &'input str,
     ) -> ContextlessUpResult<'input, (Out0, Out1)> {
-        let mut final_could_also = Vec::new();
+        let mut ctx = ();
+        let mut final_suggestions;
         let yeses = (
             {
                 let YesAnd {
                     yes,
                     and,
                     could_also,
-                    ctx: _,
+                    ctx: new_ctx,
                 } = self.0.parse_contextless(input)?;
                 input = and;
-                final_could_also = could_also;
+                final_suggestions = could_also;
+                ctx = new_ctx;
                 yes
             },
             {
@@ -106,47 +104,24 @@ where
                     yes,
                     and,
                     could_also,
-                    ctx: _,
+                    ctx: new_ctx,
                 } = self.1.parse_contextless(input)?;
                 input = and;
-                final_could_also = could_also;
+                final_suggestions = could_also;
+                ctx = new_ctx;
                 yes
             },
         );
-        Ok(yes_and(yeses, input).also(final_could_also).no_ctx())
+        Ok(finalize_suggestions(final_suggestions, yeses, input, ctx))
     }
 }
 
 parse_up_proc_macros::_impl_contextless_series_parser_sequence_for_tuples!(
+    1..=1
+);
+parse_up_proc_macros::_impl_contextless_series_parser_sequence_for_tuples!(
     3..4
 );
-
-impl<'input, Ctx, Parser0, Out0>
-    ContextualSeriesParserSequence<'input, (Out0,), Ctx> for (Parser0,)
-where
-    Parser0: ContextualUpParser<'input, Out0, Ctx>,
-{
-    fn contextual_series(
-        &self,
-        mut input: &'input str,
-        mut ctx: Ctx,
-    ) -> UpResult<'input, (Out0,), Ctx> {
-        let mut final_could_also = Vec::new();
-        let yeses = ({
-            let YesAnd {
-                yes,
-                and,
-                could_also,
-                ctx: new_ctx,
-            } = self.0.parse_contextual(input, ctx)?;
-            input = and;
-            ctx = new_ctx;
-            final_could_also = could_also;
-            yes
-        },);
-        Ok(yes_and(yeses, input).also(final_could_also).ctx(ctx))
-    }
-}
 
 impl<'input, Ctx, Parser0, Parser1, Out0, Out1>
     ContextualSeriesParserSequence<'input, (Out0, Out1), Ctx>
@@ -160,7 +135,7 @@ where
         mut input: &'input str,
         mut ctx: Ctx,
     ) -> UpResult<'input, (Out0, Out1), Ctx> {
-        let mut final_could_also = Vec::new();
+        let mut final_suggestions;
         let yeses = (
             {
                 let YesAnd {
@@ -170,8 +145,8 @@ where
                     ctx: new_ctx,
                 } = self.0.parse_contextual(input, ctx)?;
                 input = and;
+                final_suggestions = could_also;
                 ctx = new_ctx;
-                final_could_also = could_also;
                 yes
             },
             {
@@ -182,12 +157,12 @@ where
                     ctx: new_ctx,
                 } = self.1.parse_contextual(input, ctx)?;
                 input = and;
+                final_suggestions = could_also;
                 ctx = new_ctx;
-                final_could_also = could_also;
                 yes
             },
         );
-        Ok(yes_and(yeses, input).also(final_could_also).ctx(ctx))
+        Ok(finalize_suggestions(final_suggestions, yeses, input, ctx))
     }
 }
 
@@ -206,15 +181,15 @@ mod tests {
         let hello_world = series((tag("hello"), whitespace, tag("world")));
         assert_eq!(
             hello_world.parse_contextless(""),
-            Err(go_on(["hello"]).no_ctx()),
+            Err(go_on(["hello"]).closed().no_ctx()),
         );
         assert_eq!(
             hello_world.parse_contextless("hello"),
-            Err(go_on([" "]).no_ctx())
+            Err(go_on([" "]).open().no_ctx())
         );
         assert_eq!(
             hello_world.parse_contextless("hello "),
-            Err(go_on(["world"]).no_ctx())
+            Err(go_on(["world"]).closed().no_ctx())
         );
         assert_eq!(
             hello_world.parse_contextless("hello world..."),

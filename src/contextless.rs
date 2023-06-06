@@ -15,7 +15,7 @@ pub fn tag<'tag, 'input>(
         Some(rest) => Ok(yes_and(&input[..tag.len()], rest).no_ctx()),
         None => match chars_needed_to_complete(tag, input) {
             Some("") => unreachable!("would've been caught in strip_prefix"),
-            Some(suggestion) => Err(go_on([suggestion]).no_ctx()),
+            Some(suggestion) => Err(go_on([suggestion]).closed().no_ctx()),
             None => Err(oops(input, format!("expected {tag}")).no_ctx()),
         },
     }
@@ -28,7 +28,7 @@ const _: () = {
 
 pub fn whitespace(input: &str) -> ContextlessUpResult<&str> {
     if input.is_empty() {
-        return Err(go_on([" "]).no_ctx());
+        return Err(go_on([" "]).open().no_ctx());
     }
     let trimmed = input.trim_start();
     let bytes_trimmed = input.len() - trimmed.len();

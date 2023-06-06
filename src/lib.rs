@@ -1,18 +1,25 @@
 mod contextless;
 mod ext;
 mod one_of;
-mod permute;
+// mod permute;
 mod series;
 pub mod util;
 pub use contextless::{bool, tag, whitespace};
 pub use ext::{ContextlessUpParserExt, UpResultExt};
 pub use one_of::one_of;
-pub use permute::permute;
+// pub use permute::permute;
 pub use series::series;
 
 pub type UpResult<'input, Out, Ctx> =
     Result<YesAnd<'input, Out, Ctx>, UpError<'input, Ctx>>;
 pub type ContextlessUpResult<'input, Out> = UpResult<'input, Out, ()>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Suggestions {
+    Open(Vec<String>),
+    /// Must have at least one
+    Closed(String, Vec<String>),
+}
 
 /// Successful parse so far.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,7 +29,7 @@ pub struct YesAnd<'input, Out, Ctx> {
     /// The remaining input.
     pub and: &'input str,
     /// Other valid options.
-    pub could_also: Vec<String>,
+    pub could_also: Option<Suggestions>,
     /// Context for future parsers to base suggestions off
     pub ctx: Ctx,
 }
@@ -71,7 +78,7 @@ pub enum UpError<'input, Ctx> {
     },
     /// Suggestions to append to the current input which would make parsing succeed.
     /// You should only return this when you're at the end of the input.
-    GoOn { go_on: Vec<String>, ctx: Ctx },
+    GoOn { go_on: Suggestions, ctx: Ctx },
 }
 
 pub trait ContextlessUpParser<'input, Out> {

@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use crate::{
-    series, ContextlessUpParser, ContextlessUpResult, ContextualUpParser,
-    UpError, UpResult, YesAnd,
+    ContextlessUpParser, ContextlessUpResult, ContextualUpParser, UpError,
+    UpResult, YesAnd,
 };
 
 pub struct IgnoreContext<T>(T);
@@ -54,7 +54,8 @@ where
         &self,
         input: &'input str,
     ) -> ContextlessUpResult<'input, (Out0, Out1)> {
-        series((self.0.borrowed(), self.1.borrowed())).parse_contextless(input)
+        todo!()
+        // series((self.0.borrowed(), self.1.borrowed())).parse_contextless(input)
     }
 }
 

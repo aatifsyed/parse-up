@@ -3,8 +3,9 @@ use std::fmt::Display;
 use itertools::Itertools as _;
 
 use crate::{
-    ContextlessUpParser, ContextlessUpResult, ContextualUpParser, UpError,
-    UpResult, YesAnd,
+    ContextlessUpParser, ContextlessUpResult, ContextualUpParser,
+    Suggestions::{self, Closed, Open},
+    UpError, UpResult, YesAnd,
 };
 
 pub mod assert {
@@ -47,21 +48,43 @@ pub fn yes_and<T>(yes: T, and: &str) -> YesAndBuilder<T> {
     YesAndBuilder(YesAnd {
         yes,
         and,
-        could_also: Vec::new(),
+        could_also: None,
         ctx: (),
     })
 }
 
 pub struct YesAndBuilder<'input, T>(YesAnd<'input, T, ()>);
 
+pub(crate) const EMPTY_CLOSED_SUGGESTION_PANIC_MSG: &str =
+    "closed suggestions must contain at least one suggestion. \
+return an open suggestion or an error instead.";
+
 impl<'input, T> YesAndBuilder<'input, T> {
-    pub fn also<AlsoT>(mut self, also: impl IntoIterator<Item = AlsoT>) -> Self
+    pub fn open<SuggestionT>(
+        mut self,
+        suggestions: impl IntoIterator<Item = SuggestionT>,
+    ) -> Self
     where
-        AlsoT: Display,
+        SuggestionT: Display,
     {
-        self.0
-            .could_also
-            .extend(also.into_iter().map(|it| it.to_string()));
+        self.0.could_also = Some(Open(
+            suggestions.into_iter().map(|it| it.to_string()).collect(),
+        ));
+        self
+    }
+    /// # Panics
+    /// If no suggestions are given
+    pub fn closed<SuggestionT>(
+        mut self,
+        suggestions: impl IntoIterator<Item = SuggestionT>,
+    ) -> Self
+    where
+        SuggestionT: Display,
+    {
+        let mut suggestions = suggestions.into_iter().map(|it| it.to_string());
+        let first =
+            suggestions.next().expect(EMPTY_CLOSED_SUGGESTION_PANIC_MSG);
+        self.0.could_also = Some(Closed(first, suggestions.collect()));
         self
     }
     pub fn no_ctx(self) -> YesAnd<'input, T, ()> {
@@ -83,39 +106,30 @@ impl<'input, T> YesAndBuilder<'input, T> {
     }
 }
 
-impl<'input, T, AnyCtx> PartialEq<YesAnd<'input, T, AnyCtx>>
-    for YesAndBuilder<'input, T>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &YesAnd<'input, T, AnyCtx>) -> bool {
-        self.0.yes == other.yes
-            && self.0.and == other.and
-            && self.0.could_also == other.could_also
-    }
-}
-
-impl<'input, T, AnyCtx> PartialEq<YesAndBuilder<'input, T>>
-    for YesAnd<'input, T, AnyCtx>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &YesAndBuilder<'input, T>) -> bool {
-        self.yes == other.0.yes
-            && self.and == other.0.and
-            && self.could_also == other.0.could_also
-    }
-}
-
 pub fn go_on<GoOnT: Display>(
     suggestions: impl IntoIterator<Item = GoOnT>,
-) -> GoOnBuilder {
+) -> GoOnBuilder<Vec<String>> {
     GoOnBuilder(suggestions.into_iter().map(|g| g.to_string()).collect())
 }
 
-pub struct GoOnBuilder(Vec<String>);
+pub struct GoOnBuilder<T>(T);
 
-impl GoOnBuilder {
+impl GoOnBuilder<Vec<String>> {
+    pub fn open(self) -> GoOnBuilder<Suggestions> {
+        GoOnBuilder(Open(self.0))
+    }
+    /// # Panics
+    /// If no suggestions are given
+    pub fn closed(mut self) -> GoOnBuilder<Suggestions> {
+        if self.0.is_empty() {
+            panic!("{}", EMPTY_CLOSED_SUGGESTION_PANIC_MSG)
+        };
+        let first = self.0.remove(0);
+        GoOnBuilder(Closed(first, self.0))
+    }
+}
+
+impl GoOnBuilder<Suggestions> {
     pub fn no_ctx<'any>(self) -> UpError<'any, ()> {
         UpError::GoOn {
             go_on: self.0,
@@ -124,17 +138,6 @@ impl GoOnBuilder {
     }
     pub fn ctx<'any, Ctx>(self, ctx: Ctx) -> UpError<'any, Ctx> {
         UpError::GoOn { go_on: self.0, ctx }
-    }
-}
-
-impl<'any, AnyCtx> PartialEq<UpError<'any, AnyCtx>> for GoOnBuilder {
-    fn eq(&self, other: &UpError<'any, AnyCtx>) -> bool {
-        matches!(other, UpError::GoOn { go_on, .. } if go_on == &self.0)
-    }
-}
-impl<'any, AnyCtx> PartialEq<GoOnBuilder> for UpError<'any, AnyCtx> {
-    fn eq(&self, other: &GoOnBuilder) -> bool {
-        matches!(self, UpError::GoOn { go_on, .. } if go_on == &other.0)
     }
 }
 
@@ -166,21 +169,6 @@ impl<'input> OopsBuilder<'input> {
             message,
             ctx,
         }
-    }
-}
-
-impl<'input, AnyCtx> PartialEq<UpError<'input, AnyCtx>>
-    for OopsBuilder<'input>
-{
-    fn eq(&self, other: &UpError<'input, AnyCtx>) -> bool {
-        matches!(other, UpError::Oops { input, message, .. } if input == &self.input && message == &self.message)
-    }
-}
-impl<'input, AnyCtx> PartialEq<OopsBuilder<'input>>
-    for UpError<'input, AnyCtx>
-{
-    fn eq(&self, other: &OopsBuilder<'input>) -> bool {
-        matches!(self, UpError::Oops { input, message, .. } if input == &other.input && message == &other.message)
     }
 }
 

@@ -1,7 +1,8 @@
 use crate::{
     util::{go_on, oops},
-    ContextlessUpParser, ContextlessUpResult, ContextualUpParser, UpError,
-    UpResult,
+    ContextlessUpParser, ContextlessUpResult, ContextualUpParser,
+    Suggestions::{self, Closed, Open},
+    UpError, UpResult,
 };
 
 pub fn one_of<ParserSequence>(
@@ -53,29 +54,37 @@ where
     }
 }
 
-impl<'input, Out, Parser0> ContextlessOneOfParserSequence<'input, Out>
-    for (Parser0,)
-where
-    Parser0: ContextlessUpParser<'input, Out>,
-{
-    fn contextless_one_of(
-        &self,
-        input: &'input str,
-    ) -> ContextlessUpResult<'input, Out> {
-        let mut all_go_ons = Vec::new();
-        let mut error = true;
-        match self.0.parse_contextless(input) {
-            Ok(o) => return Ok(o),
-            Err(UpError::GoOn { go_on, .. }) => {
-                all_go_ons.extend(go_on);
-                error = false
-            }
-            Err(UpError::Oops { .. }) => {}
+fn fold_suggestions(
+    suggestions: Suggestions,
+    all_suggestions: &mut Vec<String>,
+    open: &mut bool,
+    error: &mut bool,
+) {
+    match suggestions {
+        Open(suggestions) => {
+            *open = true;
+            all_suggestions.extend(suggestions)
         }
-        match error {
-            true => Err(oops(input, "no branches could continue").no_ctx()),
-            false => Err(go_on(all_go_ons).no_ctx()),
+        Closed(first, rest) => {
+            all_suggestions.push(first);
+            all_suggestions.extend(rest)
         }
+    }
+    *error = false;
+}
+fn finalise_suggestions<Ctx>(
+    input: &str,
+    all_suggestions: Vec<String>,
+    error: bool,
+    open: bool,
+    ctx: Ctx,
+) -> UpError<Ctx> {
+    match error {
+        true => oops(input, "no branches could continue").ctx(ctx),
+        false => match open {
+            true => go_on(all_suggestions).open().ctx(ctx),
+            false => go_on(all_suggestions).closed().ctx(ctx),
+        },
     }
 }
 
@@ -89,65 +98,45 @@ where
         &self,
         input: &'input str,
     ) -> ContextlessUpResult<'input, Out> {
-        let mut all_go_ons = Vec::new();
+        let mut all_suggestions = Vec::new();
+        let mut open = false;
         let mut error = true;
         match self.0.parse_contextless(input) {
             Ok(o) => return Ok(o),
-            Err(UpError::GoOn { go_on, .. }) => {
-                all_go_ons.extend(go_on);
-                error = false
-            }
+            Err(UpError::GoOn { go_on, .. }) => fold_suggestions(
+                go_on,
+                &mut all_suggestions,
+                &mut open,
+                &mut error,
+            ),
             Err(UpError::Oops { .. }) => {}
         }
         match self.1.parse_contextless(input) {
             Ok(o) => return Ok(o),
-            Err(UpError::GoOn { go_on, .. }) => {
-                all_go_ons.extend(go_on);
-                error = false
-            }
+            Err(UpError::GoOn { go_on, .. }) => fold_suggestions(
+                go_on,
+                &mut all_suggestions,
+                &mut open,
+                &mut error,
+            ),
             Err(UpError::Oops { .. }) => {}
         }
-        match error {
-            true => Err(oops(input, "no branches could continue").no_ctx()),
-            false => Err(go_on(all_go_ons).no_ctx()),
-        }
+        Err(finalise_suggestions(
+            input,
+            all_suggestions,
+            error,
+            open,
+            (),
+        ))
     }
 }
 
 parse_up_proc_macros::_impl_contextless_one_of_parser_sequence_for_tuples!(
+    1..=1
+);
+parse_up_proc_macros::_impl_contextless_one_of_parser_sequence_for_tuples!(
     3..10
 );
-
-impl<'input, Out, Ctx, Parser0> ContextualOneOfParserSequence<'input, Out, Ctx>
-    for (Parser0,)
-where
-    Parser0: ContextualUpParser<'input, Out, Ctx>,
-{
-    fn contextual_one_of(
-        &self,
-        input: &'input str,
-        mut ctx: Ctx,
-    ) -> UpResult<'input, Out, Ctx> {
-        let mut all_go_ons = Vec::new();
-        let mut error = true;
-        match self.0.parse_contextual(input, ctx) {
-            Ok(o) => return Ok(o),
-            Err(UpError::GoOn {
-                go_on,
-                ctx: new_ctx,
-            }) => {
-                all_go_ons.extend(go_on);
-                error = false;
-                ctx = new_ctx
-            }
-            Err(UpError::Oops { ctx: new_ctx, .. }) => ctx = new_ctx,
-        }
-        match error {
-            true => Err(oops(input, "no branches could continue").ctx(ctx)),
-            false => Err(go_on(all_go_ons).ctx(ctx)),
-        }
-    }
-}
 
 impl<'input, Out, Ctx, Parser0, Parser1>
     ContextualOneOfParserSequence<'input, Out, Ctx> for (Parser0, Parser1)
@@ -160,7 +149,8 @@ where
         input: &'input str,
         mut ctx: Ctx,
     ) -> UpResult<'input, Out, Ctx> {
-        let mut all_go_ons = Vec::new();
+        let mut all_suggestions = Vec::new();
+        let mut open = false;
         let mut error = true;
         match self.0.parse_contextual(input, ctx) {
             Ok(o) => return Ok(o),
@@ -168,32 +158,48 @@ where
                 go_on,
                 ctx: new_ctx,
             }) => {
-                all_go_ons.extend(go_on);
-                error = false;
+                fold_suggestions(
+                    go_on,
+                    &mut all_suggestions,
+                    &mut open,
+                    &mut error,
+                );
                 ctx = new_ctx
             }
             Err(UpError::Oops { ctx: new_ctx, .. }) => ctx = new_ctx,
         }
-        match self.1.parse_contextual(input, ctx) {
+        match self.0.parse_contextual(input, ctx) {
             Ok(o) => return Ok(o),
             Err(UpError::GoOn {
                 go_on,
                 ctx: new_ctx,
             }) => {
-                all_go_ons.extend(go_on);
-                error = false;
+                fold_suggestions(
+                    go_on,
+                    &mut all_suggestions,
+                    &mut open,
+                    &mut error,
+                );
                 ctx = new_ctx
             }
             Err(UpError::Oops { ctx: new_ctx, .. }) => ctx = new_ctx,
         }
-        match error {
-            true => Err(oops(input, "no branches could continue").ctx(ctx)),
-            false => Err(go_on(all_go_ons).ctx(ctx)),
-        }
+        Err(finalise_suggestions(
+            input,
+            all_suggestions,
+            error,
+            open,
+            ctx,
+        ))
     }
 }
 
-parse_up_proc_macros::_impl_contextual_one_of_parser_sequence_for_tuples!(3..4);
+parse_up_proc_macros::_impl_contextual_one_of_parser_sequence_for_tuples!(
+    1..=1
+);
+parse_up_proc_macros::_impl_contextual_one_of_parser_sequence_for_tuples!(
+    3..10
+);
 
 #[cfg(test)]
 mod tests {
@@ -216,11 +222,15 @@ mod tests {
         );
         assert_eq!(
             one_of((tag("true"), tag("false"))).parse_contextless(""),
-            Err(go_on(["true", "false"]).no_ctx()),
+            Err(go_on(["true", "false"]).closed().no_ctx()),
         );
         assert_eq!(
             one_of((tag("true"), tag("false"))).parse_contextless("t"),
-            Err(go_on(["rue"]).no_ctx()),
+            Err(go_on(["rue"]).closed().no_ctx()),
+        );
+        assert_eq!(
+            one_of((tag("true"), tag("false"))).parse_contextless("f"),
+            Err(go_on(["alse"]).closed().no_ctx()),
         );
         assert_eq!(
             one_of((tag("true"), tag("false"))).parse_contextless("..."),
