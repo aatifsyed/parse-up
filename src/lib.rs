@@ -1,17 +1,16 @@
 mod contextless;
 mod ext;
 mod one_of;
-// mod permute;
+mod permute;
 mod series;
 pub mod util;
 pub use contextless::{bool, tag, whitespace};
 pub use ext::{ContextlessUpParserExt, UpResultExt};
 pub use one_of::one_of;
-// pub use permute::permute;
+pub use permute::permute;
 pub use series::series;
 
-pub type UpResult<'input, Out, Ctx> =
-    Result<YesAnd<'input, Out, Ctx>, UpError<'input, Ctx>>;
+pub type UpResult<'input, Out, Ctx> = Result<YesAnd<'input, Out, Ctx>, UpError<'input, Ctx>>;
 pub type ContextlessUpResult<'input, Out> = UpResult<'input, Out, ()>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -35,10 +34,7 @@ pub struct YesAnd<'input, Out, Ctx> {
 }
 
 impl<'input, Out, Ctx> YesAnd<'input, Out, Ctx> {
-    pub fn map_yes<Out2>(
-        self,
-        f: impl Fn(Out) -> Out2,
-    ) -> YesAnd<'input, Out2, Ctx> {
+    pub fn map_yes<Out2>(self, f: impl Fn(Out) -> Out2) -> YesAnd<'input, Out2, Ctx> {
         YesAnd {
             yes: f(self.yes),
             and: self.and,
@@ -46,10 +42,7 @@ impl<'input, Out, Ctx> YesAnd<'input, Out, Ctx> {
             ctx: self.ctx,
         }
     }
-    pub fn map_ctx<Ctx2>(
-        self,
-        f: impl Fn(Ctx) -> Ctx2,
-    ) -> YesAnd<'input, Out, Ctx2> {
+    pub fn map_ctx<Ctx2>(self, f: impl Fn(Ctx) -> Ctx2) -> YesAnd<'input, Out, Ctx2> {
         YesAnd {
             yes: self.yes,
             and: self.and,
@@ -82,42 +75,27 @@ pub enum UpError<'input, Ctx> {
 }
 
 pub trait ContextlessUpParser<'input, Out> {
-    fn parse_contextless(
-        &self,
-        input: &'input str,
-    ) -> ContextlessUpResult<'input, Out>;
+    fn parse_contextless(&self, input: &'input str) -> ContextlessUpResult<'input, Out>;
 }
 
 impl<'input, ParserFn, Out> ContextlessUpParser<'input, Out> for ParserFn
 where
     ParserFn: Fn(&'input str) -> ContextlessUpResult<'input, Out>,
 {
-    fn parse_contextless(
-        &self,
-        input: &'input str,
-    ) -> ContextlessUpResult<'input, Out> {
+    fn parse_contextless(&self, input: &'input str) -> ContextlessUpResult<'input, Out> {
         self(input)
     }
 }
 
 pub trait ContextualUpParser<'input, Out, Ctx, MapCtx = Ctx> {
-    fn parse_contextual(
-        &self,
-        input: &'input str,
-        ctx: Ctx,
-    ) -> UpResult<'input, Out, MapCtx>;
+    fn parse_contextual(&self, input: &'input str, ctx: Ctx) -> UpResult<'input, Out, MapCtx>;
 }
 
-impl<'input, ParserFn, Out, Ctx, MapCtx>
-    ContextualUpParser<'input, Out, Ctx, MapCtx> for ParserFn
+impl<'input, ParserFn, Out, Ctx, MapCtx> ContextualUpParser<'input, Out, Ctx, MapCtx> for ParserFn
 where
     ParserFn: Fn(&'input str, Ctx) -> UpResult<'input, Out, MapCtx>,
 {
-    fn parse_contextual(
-        &self,
-        input: &'input str,
-        ctx: Ctx,
-    ) -> UpResult<'input, Out, MapCtx> {
+    fn parse_contextual(&self, input: &'input str, ctx: Ctx) -> UpResult<'input, Out, MapCtx> {
         self(input, ctx)
     }
 }

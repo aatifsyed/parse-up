@@ -1,12 +1,13 @@
-use proc_macro2::{Ident, Literal, Span, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
+use syn::Index;
 
 /// (
 ///     [Parser0, Parser1, ... ],
 ///     [Out0, Out1, ...],
 ///     [0, 1, ...],
 /// )
-fn vars(num_tuples: usize) -> (Vec<Ident>, Vec<Ident>, Vec<Literal>) {
+fn vars(num_tuples: usize) -> (Vec<Ident>, Vec<Ident>, Vec<Index>) {
     // Parser0, Parser1 ...
     let parser_ty_param = (0..num_tuples)
         .map(|n| Ident::new(&format!("Parser{n}"), Span::call_site()))
@@ -14,7 +15,12 @@ fn vars(num_tuples: usize) -> (Vec<Ident>, Vec<Ident>, Vec<Literal>) {
     let out_ty_param = (0..num_tuples)
         .map(|n| Ident::new(&format!("Out{n}"), Span::call_site()))
         .collect();
-    let tuple_ix = (0..num_tuples).map(Literal::usize_unsuffixed).collect();
+    let tuple_ix = (0..num_tuples)
+        .map(|index| Index {
+            index: index.try_into().unwrap(),
+            span: Span::call_site(),
+        })
+        .collect();
     (parser_ty_param, out_ty_param, tuple_ix)
 }
 
@@ -239,6 +245,72 @@ pub fn _impl_contextual_series_parser_sequence_for_tuples(
                         },)*
                     );
                     Ok(finalize_suggestions(final_suggestions, yeses, input, ctx))
+                }
+            }
+        }
+    })
+    .collect::<TokenStream>()
+    .into()
+}
+
+fn yes_var(ix: usize) -> Ident {
+    Ident::new(&format!("yes{ix}"), Span::call_site())
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn _impl_contextless_permute_parser_sequence_for_tuples(
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let args = match args::parse(item.into()) {
+        Ok(args) => args,
+        Err(e) => return e.into_compile_error().into(),
+    };
+    args.map(|num_tuples| {
+        let (parser_ty_param, out_ty_param, _) = vars(num_tuples);
+        let inner = (0..num_tuples).map(|tuple_ix| {
+            let this = Index::from(tuple_ix);
+            let rest = (0..num_tuples)
+                .filter(|it| *it != tuple_ix)
+                .map(Index::from)
+                .collect::<Vec<_>>();
+            let this_var_name = yes_var(tuple_ix);
+            let rest_var_names = rest.iter().map(|it| yes_var(it.index.try_into().unwrap()));
+            let all_var_names = (0..num_tuples).map(yes_var);
+            quote! {
+                series((
+                    self.#this.borrowed(),
+                    permute((#(self.#rest.borrowed(),)*)),
+                ))
+                .map_yes(|(#this_var_name, (#(#rest_var_names,)*))|{
+                    (#(#all_var_names,)*)
+                })
+            }
+        });
+        quote! {
+            impl<'input,
+                #(#out_ty_param,)*
+                #(#parser_ty_param,)*
+                >
+                ContextlessPermuteParserSequence<'input, (
+                    #(#out_ty_param,)*
+                )>
+                for (
+                    #(#parser_ty_param,)*
+                )
+            where
+                #(#parser_ty_param: ContextlessUpParser<'input, #out_ty_param>,)*
+            {
+                fn contextless_permute(
+                    &self,
+                    input: &'input str,
+                ) -> ContextlessUpResult<'input, (
+                    #(#out_ty_param,)*
+                )> {
+                    one_of((
+                        #(#inner,)*
+                    ))
+                    .parse_contextless(input)
                 }
             }
         }
