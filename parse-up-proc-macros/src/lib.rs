@@ -257,6 +257,28 @@ fn yes_var(ix: usize) -> Ident {
     Ident::new(&format!("yes{ix}"), Span::call_site())
 }
 
+fn permute_inner(num_tuples: usize) -> impl Iterator<Item = TokenStream> {
+    (0..num_tuples).map(move |tuple_ix| {
+        let this = Index::from(tuple_ix);
+        let rest = (0..num_tuples)
+            .filter(|it| *it != tuple_ix)
+            .map(Index::from)
+            .collect::<Vec<_>>();
+        let this_var_name = yes_var(tuple_ix);
+        let rest_var_names = rest.iter().map(|it| yes_var(it.index.try_into().unwrap()));
+        let all_var_names = (0..num_tuples).map(yes_var);
+        quote! {
+            series((
+                self.#this.borrowed(),
+                permute((#(self.#rest.borrowed(),)*)),
+            ))
+            .map_yes(|(#this_var_name, (#(#rest_var_names,)*))|{
+                (#(#all_var_names,)*)
+            })
+        }
+    })
+}
+
 #[doc(hidden)]
 #[proc_macro]
 pub fn _impl_contextless_permute_parser_sequence_for_tuples(
@@ -268,25 +290,7 @@ pub fn _impl_contextless_permute_parser_sequence_for_tuples(
     };
     args.map(|num_tuples| {
         let (parser_ty_param, out_ty_param, _) = vars(num_tuples);
-        let inner = (0..num_tuples).map(|tuple_ix| {
-            let this = Index::from(tuple_ix);
-            let rest = (0..num_tuples)
-                .filter(|it| *it != tuple_ix)
-                .map(Index::from)
-                .collect::<Vec<_>>();
-            let this_var_name = yes_var(tuple_ix);
-            let rest_var_names = rest.iter().map(|it| yes_var(it.index.try_into().unwrap()));
-            let all_var_names = (0..num_tuples).map(yes_var);
-            quote! {
-                series((
-                    self.#this.borrowed(),
-                    permute((#(self.#rest.borrowed(),)*)),
-                ))
-                .map_yes(|(#this_var_name, (#(#rest_var_names,)*))|{
-                    (#(#all_var_names,)*)
-                })
-            }
-        });
+        let inner = permute_inner(num_tuples);
         quote! {
             impl<'input,
                 #(#out_ty_param,)*
@@ -311,6 +315,52 @@ pub fn _impl_contextless_permute_parser_sequence_for_tuples(
                         #(#inner,)*
                     ))
                     .parse_contextless(input)
+                }
+            }
+        }
+    })
+    .collect::<TokenStream>()
+    .into()
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn _impl_contextual_permute_parser_sequence_for_tuples(
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let args = match args::parse(item.into()) {
+        Ok(args) => args,
+        Err(e) => return e.into_compile_error().into(),
+    };
+    args.map(|num_tuples| {
+        let (parser_ty_param, out_ty_param, _) = vars(num_tuples);
+        let inner = permute_inner(num_tuples);
+        quote! {
+            impl<'input,
+                #(#out_ty_param,)*
+                #(#parser_ty_param,)*
+                Ctx,
+                >
+                ContextualPermuteParserSequence<'input, (
+                    #(#out_ty_param,)*
+                ), Ctx>
+                for (
+                    #(#parser_ty_param,)*
+                )
+            where
+                #(#parser_ty_param: ContextualUpParser<'input, #out_ty_param, Ctx>,)*
+            {
+                fn contextual_permute(
+                    &self,
+                    input: &'input str,
+                    ctx: Ctx,
+                ) -> UpResult<'input, (
+                    #(#out_ty_param,)*
+                ), Ctx> {
+                    one_of((
+                        #(#inner,)*
+                    ))
+                    .parse_contextual(input, ctx)
                 }
             }
         }

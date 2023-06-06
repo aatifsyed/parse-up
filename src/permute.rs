@@ -1,6 +1,8 @@
 use crate::{
-    ext::ContextlessUpParserExt, one_of::one_of, series::series, ContextlessUpParser,
-    ContextlessUpResult, ContextualUpParser, UpResult,
+    ext::{ContextlessUpParserExt as _, ContextualUpParserExt as _},
+    one_of::one_of,
+    series::series,
+    ContextlessUpParser, ContextlessUpResult, ContextualUpParser, UpResult,
 };
 
 pub fn permute<ParserSequence>(parsers: ParserSequence) -> Permute<ParserSequence> {
@@ -92,6 +94,69 @@ where
 }
 
 parse_up_proc_macros::_impl_contextless_permute_parser_sequence_for_tuples!(4..10);
+
+impl<'input, Out0, Parser0, Ctx> ContextualPermuteParserSequence<'input, (Out0,), Ctx> for (Parser0,)
+where
+    Parser0: ContextualUpParser<'input, Out0, Ctx>,
+{
+    fn contextual_permute(&self, input: &'input str, ctx: Ctx) -> UpResult<'input, (Out0,), Ctx> {
+        one_of((series((self.0.borrowed(),)).map_yes(|(yes0,)| (yes0,)),))
+            .parse_contextual(input, ctx)
+    }
+}
+
+impl<'input, Out0, Out1, Parser0, Parser1, Ctx>
+    ContextualPermuteParserSequence<'input, (Out0, Out1), Ctx> for (Parser0, Parser1)
+where
+    Parser0: ContextualUpParser<'input, Out0, Ctx>,
+    Parser1: ContextualUpParser<'input, Out1, Ctx>,
+{
+    fn contextual_permute(
+        &self,
+        input: &'input str,
+        ctx: Ctx,
+    ) -> UpResult<'input, (Out0, Out1), Ctx> {
+        one_of((
+            series((self.0.borrowed(), self.1.borrowed())).map_yes(|(yes0, yes1)| (yes0, yes1)),
+            series((self.1.borrowed(), self.0.borrowed())).map_yes(|(yes1, yes0)| (yes0, yes1)),
+        ))
+        .parse_contextual(input, ctx)
+    }
+}
+impl<'input, Out0, Out1, Out2, Parser0, Parser1, Parser2, Ctx>
+    ContextualPermuteParserSequence<'input, (Out0, Out1, Out2), Ctx> for (Parser0, Parser1, Parser2)
+where
+    Parser0: ContextualUpParser<'input, Out0, Ctx>,
+    Parser1: ContextualUpParser<'input, Out1, Ctx>,
+    Parser2: ContextualUpParser<'input, Out2, Ctx>,
+{
+    fn contextual_permute(
+        &self,
+        input: &'input str,
+        ctx: Ctx,
+    ) -> UpResult<'input, (Out0, Out1, Out2), Ctx> {
+        one_of((
+            series((
+                self.0.borrowed(),
+                permute((self.1.borrowed(), self.2.borrowed())),
+            ))
+            .map_yes(|(yes0, (yes1, yes2))| (yes0, yes1, yes2)),
+            series((
+                self.1.borrowed(),
+                permute((self.0.borrowed(), self.2.borrowed())),
+            ))
+            .map_yes(|(yes1, (yes0, yes2))| (yes0, yes1, yes2)),
+            series((
+                self.2.borrowed(),
+                permute((self.0.borrowed(), self.1.borrowed())),
+            ))
+            .map_yes(|(yes2, (yes0, yes1))| (yes0, yes1, yes2)),
+        ))
+        .parse_contextual(input, ctx)
+    }
+}
+
+parse_up_proc_macros::_impl_contextual_permute_parser_sequence_for_tuples!(4..10);
 
 #[cfg(test)]
 mod tests {
