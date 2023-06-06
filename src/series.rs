@@ -8,37 +8,24 @@ use crate::{
 
 use std::iter::once;
 
-pub fn series<ParserSequence>(
-    parsers: ParserSequence,
-) -> Series<ParserSequence> {
+pub fn series<ParserSequence>(parsers: ParserSequence) -> Series<ParserSequence> {
     Series(parsers)
 }
 
 pub struct Series<ParserSequence>(ParserSequence);
 
 trait ContextlessSeriesParserSequence<'input, Out> {
-    fn contextless_series(
-        &self,
-        input: &'input str,
-    ) -> ContextlessUpResult<'input, Out>;
+    fn contextless_series(&self, input: &'input str) -> ContextlessUpResult<'input, Out>;
 }
 trait ContextualSeriesParserSequence<'input, Out, Ctx> {
-    fn contextual_series(
-        &self,
-        input: &'input str,
-        ctx: Ctx,
-    ) -> UpResult<'input, Out, Ctx>;
+    fn contextual_series(&self, input: &'input str, ctx: Ctx) -> UpResult<'input, Out, Ctx>;
 }
 
-impl<'input, Out, ParserSequence> ContextlessUpParser<'input, Out>
-    for Series<ParserSequence>
+impl<'input, Out, ParserSequence> ContextlessUpParser<'input, Out> for Series<ParserSequence>
 where
     ParserSequence: ContextlessSeriesParserSequence<'input, Out>,
 {
-    fn parse_contextless(
-        &self,
-        input: &'input str,
-    ) -> ContextlessUpResult<'input, Out> {
+    fn parse_contextless(&self, input: &'input str) -> ContextlessUpResult<'input, Out> {
         self.0.contextless_series(input)
     }
 }
@@ -48,11 +35,7 @@ impl<'input, Out, Ctx, ParserSequence> ContextualUpParser<'input, Out, Ctx>
 where
     ParserSequence: ContextualSeriesParserSequence<'input, Out, Ctx>,
 {
-    fn parse_contextual(
-        &self,
-        input: &'input str,
-        ctx: Ctx,
-    ) -> UpResult<'input, Out, Ctx> {
+    fn parse_contextual(&self, input: &'input str, ctx: Ctx) -> UpResult<'input, Out, Ctx> {
         self.0.contextual_series(input, ctx)
     }
 }
@@ -65,17 +48,15 @@ fn finalize_suggestions<T, Ctx>(
 ) -> YesAnd<T, Ctx> {
     match final_suggestions {
         None => yes_and(yeses, input).ctx(ctx),
-        Some(Open(suggestions)) => {
-            yes_and(yeses, input).open(suggestions).ctx(ctx)
-        }
+        Some(Open(suggestions)) => yes_and(yeses, input).open(suggestions).ctx(ctx),
         Some(Closed(first, rest)) => yes_and(yeses, input)
             .closed(once(first).chain(rest))
             .ctx(ctx),
     }
 }
 
-impl<'input, Out0, Parser0, Out1, Parser1>
-    ContextlessSeriesParserSequence<'input, (Out0, Out1)> for (Parser0, Parser1)
+impl<'input, Out0, Parser0, Out1, Parser1> ContextlessSeriesParserSequence<'input, (Out0, Out1)>
+    for (Parser0, Parser1)
 where
     Parser0: ContextlessUpParser<'input, Out0>,
     Parser1: ContextlessUpParser<'input, Out1>,
@@ -116,16 +97,10 @@ where
     }
 }
 
-parse_up_proc_macros::_impl_contextless_series_parser_sequence_for_tuples!(
-    1..=1
-);
-parse_up_proc_macros::_impl_contextless_series_parser_sequence_for_tuples!(
-    3..4
-);
+parse_up_proc_macros::_impl_contextless_series_parser_sequence_for_tuples!(1, 3..4);
 
 impl<'input, Ctx, Parser0, Parser1, Out0, Out1>
-    ContextualSeriesParserSequence<'input, (Out0, Out1), Ctx>
-    for (Parser0, Parser1)
+    ContextualSeriesParserSequence<'input, (Out0, Out1), Ctx> for (Parser0, Parser1)
 where
     Parser0: ContextualUpParser<'input, Out0, Ctx>,
     Parser1: ContextualUpParser<'input, Out1, Ctx>,
@@ -166,7 +141,7 @@ where
     }
 }
 
-parse_up_proc_macros::_impl_contextual_series_parser_sequence_for_tuples!(3..4);
+parse_up_proc_macros::_impl_contextual_series_parser_sequence_for_tuples!(1, 3..4);
 
 #[cfg(test)]
 mod tests {
