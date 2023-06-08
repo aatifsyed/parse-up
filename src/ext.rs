@@ -39,6 +39,18 @@ pub trait ContextlessUpParserExt<'input, Out>: ContextlessUpParser<'input, Out> 
     {
         FollowedBy(self, next)
     }
+    fn dyn_ref(&self) -> &(dyn ContextlessUpParser<'input, Out> + '_)
+    where
+        Self: Sized,
+    {
+        self
+    }
+    fn dyn_box<'s>(self) -> Box<dyn ContextlessUpParser<'input, Out> + 's>
+    where
+        Self: Sized + 's,
+    {
+        Box::new(self)
+    }
 }
 
 impl<'input, Out, T> ContextlessUpParserExt<'input, Out> for T where
@@ -65,6 +77,18 @@ pub trait ContextualUpParserExt<'input, Out, Ctx>: ContextualUpParser<'input, Ou
         Self: Sized,
     {
         FollowedBy(self, next)
+    }
+    fn dyn_ref(&self) -> &(dyn ContextualUpParser<'input, Out, Ctx> + '_)
+    where
+        Self: Sized,
+    {
+        self
+    }
+    fn dyn_box<'s>(self) -> Box<dyn ContextualUpParser<'input, Out, Ctx> + 's>
+    where
+        Self: Sized + 's,
+    {
+        Box::new(self)
     }
 }
 

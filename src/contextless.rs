@@ -1,16 +1,12 @@
 use crate::{
     one_of,
-    util::{
-        assert_contextless_parser_fn, chars_needed_to_complete, go_on, oops,
-        yes_and,
-    },
+    util::{assert_contextless_parser_fn, chars_needed_to_complete, go_on, oops, yes_and},
     ContextlessUpParser, ContextlessUpParserExt, ContextlessUpResult,
 };
 
 pub fn tag<'tag, 'input>(
     tag: &'tag str,
-) -> impl Fn(&'input str) -> ContextlessUpResult<'input, &'input str> + 'tag + Copy
-{
+) -> impl Fn(&'input str) -> ContextlessUpResult<'input, &'input str> + 'tag + Copy {
     move |input| match input.strip_prefix(tag) {
         Some(rest) => Ok(yes_and(&input[..tag.len()], rest).no_ctx()),
         None => match chars_needed_to_complete(tag, input) {
@@ -50,4 +46,17 @@ pub fn bool(input: &str) -> ContextlessUpResult<bool> {
         tag("false").map_yes(|_| false),
     ))
     .parse_contextless(input)
+}
+
+pub fn displayed<'input, T>(item: T) -> impl Fn(&'input str) -> ContextlessUpResult<'input, T>
+where
+    T: ToString + Clone,
+{
+    let display = item.to_string();
+    move |input| {
+        let item = item.clone();
+        tag(&display)
+            .map_yes(move |_| item.clone())
+            .parse_contextless(input)
+    }
 }

@@ -9,6 +9,10 @@ pub fn one_of<ParserSequence>(parsers: ParserSequence) -> OneOf<ParserSequence> 
     OneOf(parsers)
 }
 
+pub fn one_of_iter<T>(parser: impl IntoIterator<Item = T>) -> OneOf<Vec<T>> {
+    OneOf(parser.into_iter().collect())
+}
+
 pub struct OneOf<ParserSequence>(ParserSequence);
 
 trait ContextlessOneOfParserSequence<'input, Out> {
@@ -68,6 +72,51 @@ fn finalise_suggestions<Ctx>(
             true => go_on(all_suggestions).open().ctx(ctx),
             false => go_on(all_suggestions).closed().ctx(ctx),
         },
+    }
+}
+impl<'input, Out, Parser> ContextlessOneOfParserSequence<'input, Out> for Vec<Parser>
+where
+    Parser: ContextlessUpParser<'input, Out>,
+{
+    fn contextless_one_of(&self, input: &'input str) -> ContextlessUpResult<'input, Out> {
+        self.as_slice().contextless_one_of(input)
+    }
+}
+
+impl<'input, Out, Parser> ContextlessOneOfParserSequence<'input, Out> for &[Parser]
+where
+    Parser: ContextlessUpParser<'input, Out>,
+{
+    fn contextless_one_of(&self, input: &'input str) -> ContextlessUpResult<'input, Out> {
+        let mut all_suggestions = Vec::new();
+        let mut open = false;
+        let mut error = true;
+        for parser in self.iter() {
+            match parser.parse_contextless(input) {
+                Ok(o) => return Ok(o),
+                Err(UpError::GoOn { go_on, .. }) => {
+                    fold_suggestions(go_on, &mut all_suggestions, &mut open, &mut error)
+                }
+                Err(UpError::Oops { .. }) => {}
+            }
+        }
+        Err(finalise_suggestions(
+            input,
+            all_suggestions,
+            error,
+            open,
+            (),
+        ))
+    }
+}
+
+impl<'input, Out, Parser, const N: usize> ContextlessOneOfParserSequence<'input, Out>
+    for [Parser; N]
+where
+    Parser: ContextlessUpParser<'input, Out>,
+{
+    fn contextless_one_of(&self, input: &'input str) -> ContextlessUpResult<'input, Out> {
+        self.as_slice().contextless_one_of(input)
     }
 }
 
@@ -191,5 +240,14 @@ mod tests {
             one_of((tag("yes"), tag("no"), tag("maybe"))).parse_contextless("maybe..."),
             Ok(yes_and("maybe", "...").no_ctx()),
         );
+    }
+
+    #[test]
+    fn contextless_arrs() {
+        let parser = one_of([tag("yes"), tag("no")]);
+        assert_eq!(
+            parser.parse_contextless("yes..."),
+            Ok(yes_and("yes", "...").no_ctx())
+        )
     }
 }
