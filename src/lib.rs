@@ -9,6 +9,7 @@ pub use ext::{ContextlessUpParserExt, UpResultExt};
 pub use one_of::{one_of, one_of_iter};
 pub use permute::permute;
 pub use series::series;
+mod lex;
 
 pub type UpResult<'input, Out, Ctx> = Result<YesAnd<'input, Out, Ctx>, UpError<'input, Ctx>>;
 pub type ContextlessUpResult<'input, Out> = UpResult<'input, Out, ()>;
