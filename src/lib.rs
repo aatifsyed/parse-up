@@ -1,15 +1,21 @@
 mod contextless;
 mod ext;
+// mod lex;
+mod many;
 mod one_of;
 mod permute;
+mod recognize;
+mod ron;
 mod series;
 pub mod util;
-pub use contextless::{bool, displayed, tag, whitespace};
+
+pub use contextless::{bool, displayed, regex, tag, take_until, whitespace};
 pub use ext::{ContextlessUpParserExt, UpResultExt};
+pub use many::{many0, many1};
 pub use one_of::{one_of, one_of_iter};
 pub use permute::permute;
+pub use recognize::recognize;
 pub use series::series;
-mod lex;
 
 pub type UpResult<'input, Out, Ctx> = Result<YesAnd<'input, Out, Ctx>, UpError<'input, Ctx>>;
 pub type ContextlessUpResult<'input, Out> = UpResult<'input, Out, ()>;
