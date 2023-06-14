@@ -12,6 +12,7 @@ pub fn series<ParserSequence>(parsers: ParserSequence) -> Series<ParserSequence>
     Series(parsers)
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Series<ParserSequence>(ParserSequence);
 
 trait ContextlessSeriesParserSequence<'input, Out> {
@@ -97,7 +98,7 @@ where
     }
 }
 
-parse_up_proc_macros::_impl_contextless_series_parser_sequence_for_tuples!(1, 3..4);
+parse_up_proc_macros::_impl_contextless_series_parser_sequence_for_tuples!(1, 3..10);
 
 impl<'input, Ctx, Parser0, Parser1, Out0, Out1>
     ContextualSeriesParserSequence<'input, (Out0, Out1), Ctx> for (Parser0, Parser1)

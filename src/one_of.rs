@@ -13,6 +13,7 @@ pub fn one_of_iter<T>(parser: impl IntoIterator<Item = T>) -> OneOf<Vec<T>> {
     OneOf(parser.into_iter().collect())
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct OneOf<ParserSequence>(ParserSequence);
 
 trait ContextlessOneOfParserSequence<'input, Out> {
@@ -154,7 +155,7 @@ where
     }
 }
 
-parse_up_proc_macros::_impl_contextless_one_of_parser_sequence_for_tuples!(1, 3..10);
+parse_up_proc_macros::_impl_contextless_one_of_parser_sequence_for_tuples!(1, 3..20);
 
 impl<'input, Out, Ctx, Parser0, Parser1> ContextualOneOfParserSequence<'input, Out, Ctx>
     for (Parser0, Parser1)
