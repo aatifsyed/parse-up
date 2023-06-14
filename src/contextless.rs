@@ -74,3 +74,12 @@ pub fn regex<'input>(
         None => Err(oops(input, format!("regex {re} failed to match")).no_ctx()),
     }
 }
+
+pub fn take_until<'tag, 'input>(
+    tag: &'tag str,
+) -> impl Fn(&'input str) -> ContextlessUpResult<'input, &'input str> + 'tag + Copy {
+    move |input| match input.find(tag) {
+        Some(ix) => Ok(yes_and(&input[..ix], &input[ix..]).open([tag]).no_ctx()),
+        None => Err(go_on([tag]).open().no_ctx()),
+    }
+}
