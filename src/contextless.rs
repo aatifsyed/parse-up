@@ -1,3 +1,5 @@
+use regex::Regex;
+
 use crate::{
     one_of,
     util::{assert_contextless_parser_fn, chars_needed_to_complete, go_on, oops, yes_and},
@@ -58,5 +60,17 @@ where
         tag(&display)
             .map_yes(move |_| item.clone())
             .parse_contextless(input)
+    }
+}
+
+/// # Panics
+/// - If the regex is invalid
+pub fn regex<'input>(
+    re: &str,
+) -> impl Fn(&'input str) -> ContextlessUpResult<'input, regex::Match<'input>> + Clone {
+    let re = Regex::new(re).unwrap_or_else(|e| panic!("invalid regex {re}: {e}"));
+    move |input| match re.find(input) {
+        Some(m) => Ok(yes_and(m, &input[m.end()..]).no_ctx()),
+        None => Err(oops(input, format!("regex {re} failed to match")).no_ctx()),
     }
 }
