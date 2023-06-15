@@ -25,18 +25,13 @@ pub mod assert {
         contextless_up_parser(f)
     }
 }
-pub fn assert_contextless_up_parser<'input, Out>(
-    _: impl ContextlessUpParser<'input, Out>,
-) {
-}
+pub fn assert_contextless_up_parser<'input, Out>(_: impl ContextlessUpParser<'input, Out>) {}
 pub fn assert_contextless_parser_fn<'input, Out>(
     f: impl Fn(&'input str) -> ContextlessUpResult<'input, Out>,
 ) {
     assert_contextless_up_parser(f)
 }
-pub fn assert_contextual_up_parser<'input, Out, Ctx>(
-    _: impl ContextualUpParser<'input, Out, Ctx>,
-) {
+pub fn assert_contextual_up_parser<'input, Out, Ctx>(_: impl ContextualUpParser<'input, Out, Ctx>) {
 }
 pub fn assert_contextual_parser_fn<'input, Out, Ctx>(
     f: impl Fn(&'input str, Ctx) -> UpResult<'input, Out, Ctx>,
@@ -60,10 +55,10 @@ pub(crate) const EMPTY_CLOSED_SUGGESTION_PANIC_MSG: &str =
 return an open suggestion or an error instead.";
 
 impl<'input, T> YesAndBuilder<'input, T> {
-    pub fn open<SuggestionT>(
-        mut self,
-        suggestions: impl IntoIterator<Item = SuggestionT>,
-    ) -> Self
+    pub fn completely_open(mut self) -> Self {
+        self.open(Vec::<&str>::new())
+    }
+    pub fn open<SuggestionT>(mut self, suggestions: impl IntoIterator<Item = SuggestionT>) -> Self
     where
         SuggestionT: Display,
     {
@@ -74,16 +69,12 @@ impl<'input, T> YesAndBuilder<'input, T> {
     }
     /// # Panics
     /// If no suggestions are given
-    pub fn closed<SuggestionT>(
-        mut self,
-        suggestions: impl IntoIterator<Item = SuggestionT>,
-    ) -> Self
+    pub fn closed<SuggestionT>(mut self, suggestions: impl IntoIterator<Item = SuggestionT>) -> Self
     where
         SuggestionT: Display,
     {
         let mut suggestions = suggestions.into_iter().map(|it| it.to_string());
-        let first =
-            suggestions.next().expect(EMPTY_CLOSED_SUGGESTION_PANIC_MSG);
+        let first = suggestions.next().expect(EMPTY_CLOSED_SUGGESTION_PANIC_MSG);
         self.0.could_also = Some(Closed(first, suggestions.collect()));
         self
     }

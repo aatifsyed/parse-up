@@ -1,8 +1,10 @@
 // https://github.com/ron-rs/ron/blob/master/docs/grammar.md
 
+use std::borrow::Cow;
+
 use crate::{
     many0, many1, one_of, recognize, series, tag, take_until,
-    util::{go_on, yes_and},
+    util::{go_on, oops, yes_and},
     ContextlessUpParser, ContextlessUpParserExt, ContextlessUpResult, ContextualUpParser, UpError,
     UpResult, YesAnd,
 };
@@ -145,6 +147,86 @@ fn float(input: &str) -> ContextlessUpResult<&str> {
     .parse_contextless(input)
 }
 
+fn string(input: &str) -> ContextlessUpResult<Cow<str>> {
+    // TODO(aatifsyed): real string support
+    // string = string_std | string_raw;
+    // string_std = "\"", { no_double_quotation_marks | string_escape }, "\"";
+    // string_escape = "\\", ("\"" | "\\" | "b" | "f" | "n" | "r" | "t" | ("u", unicode_hex));
+    // string_raw = "r" string_raw_content;
+    // string_raw_content = ("#", string_raw_content, "#") | "\"", { unicode_non_greedy }, "\"";
+    let (rest, (_open, body, _close), _) = series((tag("\""), take_until("\""), tag("\"")))
+        .parse_contextless(input)?
+        .cont();
+    Ok(yes_and(Cow::Borrowed(body), rest).no_ctx())
+}
+
+fn char(input: &str) -> ContextlessUpResult<char> {
+    // char = "'", (no_apostrophe | "\\\\" | "\\'"), "'";
+    let (rest, (_open, char, _close), _) = series((
+        tag("'"),
+        one_of((
+            tag("\\\\").map_yes(|_| '\\'),
+            tag("\\'").map_yes(|_| '\''),
+            no_apostrophe,
+        )),
+        tag("'"),
+    ))
+    .parse_contextless(input)?
+    .cont();
+    Ok(yes_and(char, rest).no_ctx())
+}
+
+fn no_apostrophe(input: &str) -> ContextlessUpResult<char> {
+    let first = input.chars().next();
+    let second = input.char_indices().nth(1);
+    match (first, second) {
+        (Some(c), _) if c == '\'' => Err(oops(input, "apostrophe not allowed here").no_ctx()),
+        (Some(c), Some((ix, _))) => Ok(yes_and(c, &input[ix..]).completely_open().no_ctx()),
+        (Some(c), None) => Ok(yes_and(c, "").completely_open().no_ctx()),
+        (None, Some(_)) => unreachable!(),
+        (None, None) => Err(go_on::<&str>([]).open().no_ctx()),
+    }
+}
+
+fn bool(input: &str) -> ContextlessUpResult<bool> {
+    // bool = "true" | "false";
+    one_of((
+        tag("true").map_yes(|_| true),
+        tag("false").map_yes(|_| false),
+    ))
+    .parse_contextless(input)
+}
+
+// option = "None" | option_some;
+// option_some = "Some", ws, "(", ws, value, ws, ")";
+
+enum Value<'input> {
+    Unsigned(&'input str),
+    Signed(&'input str),
+    Float(&'input str),
+    String(Cow<'input, str>),
+    Char(char),
+    Bool(bool),
+    // Option,
+    List,
+    Map,
+    Tuple,
+    Struct,
+    EnumVariant,
+}
+
+fn value(input: &str) -> ContextlessUpResult<Value> {
+    // value = unsigned | signed | float | string | char | bool | option | list | map | tuple | struct | enum_variant;
+    one_of((
+        unsigned.map_yes(Value::Unsigned),
+        signed.map_yes(Value::Signed),
+        float.map_yes(Value::Float),
+        string.map_yes(Value::String),
+        char.map_yes(Value::Char),
+        bool.map_yes(Value::Bool),
+    ))
+    .parse_contextless(input)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
