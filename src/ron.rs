@@ -5,21 +5,20 @@ use std::borrow::Cow;
 use crate::{
     many0, many1, one_of, recognize, series, tag, take_until,
     util::{go_on, oops, yes_and},
-    ContextlessUpParser, ContextlessUpParserExt, ContextlessUpResult, ContextualUpParser, UpError,
-    UpResult, YesAnd,
+    ContextlessUpParser, ContextlessUpParserExt, ContextlessUpResult,
 };
 
-fn ws(input: &str) -> ContextlessUpResult<&str> {
+pub fn ws(input: &str) -> ContextlessUpResult<&str> {
     // ws = { ws_single | comment };
     recognize(many1(one_of((ws_single, line_comment)))).parse_contextless(input)
 }
 
-fn ws_single(input: &str) -> ContextlessUpResult<&str> {
+pub fn ws_single(input: &str) -> ContextlessUpResult<&str> {
     // ws_single = "\n" | "\t" | "\r" | " ";
     one_of((tag("\n"), tag("\t"), tag("\r"), tag(" "))).parse_contextless(input)
 }
 
-fn line_comment(input: &str) -> ContextlessUpResult<&str> {
+pub fn line_comment(input: &str) -> ContextlessUpResult<&str> {
     // comment = ["//", { no_newline }, "\n"] | ["/*", nested_block_comment, "*/"];
 
     // TODO(aatifsyed): nested block comments:
@@ -32,12 +31,12 @@ fn line_comment(input: &str) -> ContextlessUpResult<&str> {
     }
 }
 
-fn comma(input: &str) -> ContextlessUpResult<&str> {
+pub fn comma(input: &str) -> ContextlessUpResult<&str> {
     // comma = ws, ",", ws;
     tag(",")(input)
 }
 
-fn digit(input: &str) -> ContextlessUpResult<&str> {
+pub fn digit(input: &str) -> ContextlessUpResult<&str> {
     // digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
     one_of((
         tag("0"),
@@ -54,7 +53,7 @@ fn digit(input: &str) -> ContextlessUpResult<&str> {
     .parse_contextless(input)
 }
 
-fn hex_digit(input: &str) -> ContextlessUpResult<&str> {
+pub fn hex_digit(input: &str) -> ContextlessUpResult<&str> {
     // hex_digit = "A" | "a" | "B" | "b" | "C" | "c" | "D" | "d" | "E" | "e" | "F" | "f";
     one_of((
         tag("A"),
@@ -73,7 +72,7 @@ fn hex_digit(input: &str) -> ContextlessUpResult<&str> {
     .parse_contextless(input)
 }
 
-fn unsigned(input: &str) -> ContextlessUpResult<&str> {
+pub fn unsigned(input: &str) -> ContextlessUpResult<&str> {
     // unsigned = (["0", ("b" | "o")], digit, { digit | '_' } |
     //              "0x", (digit | hex_digit), { digit | hex_digit | '_' });
     one_of((
@@ -90,12 +89,12 @@ fn unsigned(input: &str) -> ContextlessUpResult<&str> {
     .parse_contextless(input)
 }
 
-fn signed(input: &str) -> ContextlessUpResult<&str> {
+pub fn signed(input: &str) -> ContextlessUpResult<&str> {
     // signed = ["+" | "-"], unsigned;
     recognize(series((one_of((tag("+"), tag("-"))), unsigned))).parse_contextless(input)
 }
 
-fn float_exp(input: &str) -> ContextlessUpResult<&str> {
+pub fn float_exp(input: &str) -> ContextlessUpResult<&str> {
     // float_exp = ("e" | "E"), ["+" | "-"], digit, {digit};
     recognize(series((
         one_of((tag("e"), tag("E"))),
@@ -108,24 +107,24 @@ fn float_exp(input: &str) -> ContextlessUpResult<&str> {
     )))
     .parse_contextless(input)
 }
-fn float_frac(input: &str) -> ContextlessUpResult<&str> {
+pub fn float_frac(input: &str) -> ContextlessUpResult<&str> {
     // float_frac = ".", digit, {digit};
     recognize(series((tag("."), digit, many0(digit)))).parse_contextless(input)
 }
-fn float_std(input: &str) -> ContextlessUpResult<&str> {
+pub fn float_std(input: &str) -> ContextlessUpResult<&str> {
     // float_std = digit, { digit }, ".", {digit};
     recognize(series((digit, many0(digit), tag("."), many0(digit)))).parse_contextless(input)
 }
 
-fn float_int(input: &str) -> ContextlessUpResult<&str> {
+pub fn float_int(input: &str) -> ContextlessUpResult<&str> {
     // float_int = digit, { digit };
     recognize(series((digit, many0(digit)))).parse_contextless(input)
 }
 
-fn float_num(input: &str) -> ContextlessUpResult<&str> {
+pub fn float_num(input: &str) -> ContextlessUpResult<&str> {
     // float_num = (float_int | float_std | float_frac), [float_exp];
 
-    let float_int_or_float_std_or_float_frac = one_of((float_int, float_std, float_frac));
+    let float_int_or_float_std_or_float_frac = one_of((float_frac, float_std, float_int));
     one_of((
         // lifted: no exp
         recognize(float_int_or_float_std_or_float_frac),
@@ -134,7 +133,7 @@ fn float_num(input: &str) -> ContextlessUpResult<&str> {
     .parse_contextless(input)
 }
 
-fn float(input: &str) -> ContextlessUpResult<&str> {
+pub fn float(input: &str) -> ContextlessUpResult<&str> {
     // float = ["+" | "-"], ("inf" | "NaN" | float_num);
 
     let inf_or_nan_or_float_num = one_of((tag("inf"), tag("NaN"), float_num));
@@ -147,7 +146,7 @@ fn float(input: &str) -> ContextlessUpResult<&str> {
     .parse_contextless(input)
 }
 
-fn string(input: &str) -> ContextlessUpResult<Cow<str>> {
+pub fn string(input: &str) -> ContextlessUpResult<Cow<str>> {
     // TODO(aatifsyed): real string support
     // string = string_std | string_raw;
     // string_std = "\"", { no_double_quotation_marks | string_escape }, "\"";
@@ -160,7 +159,7 @@ fn string(input: &str) -> ContextlessUpResult<Cow<str>> {
     Ok(yes_and(Cow::Borrowed(body), rest).no_ctx())
 }
 
-fn char(input: &str) -> ContextlessUpResult<char> {
+pub fn char(input: &str) -> ContextlessUpResult<char> {
     // char = "'", (no_apostrophe | "\\\\" | "\\'"), "'";
     let (rest, (_open, char, _close), _) = series((
         tag("'"),
@@ -176,7 +175,7 @@ fn char(input: &str) -> ContextlessUpResult<char> {
     Ok(yes_and(char, rest).no_ctx())
 }
 
-fn no_apostrophe(input: &str) -> ContextlessUpResult<char> {
+pub fn no_apostrophe(input: &str) -> ContextlessUpResult<char> {
     let first = input.chars().next();
     let second = input.char_indices().nth(1);
     match (first, second) {
@@ -188,7 +187,7 @@ fn no_apostrophe(input: &str) -> ContextlessUpResult<char> {
     }
 }
 
-fn bool(input: &str) -> ContextlessUpResult<bool> {
+pub fn bool(input: &str) -> ContextlessUpResult<bool> {
     // bool = "true" | "false";
     one_of((
         tag("true").map_yes(|_| true),
@@ -200,7 +199,8 @@ fn bool(input: &str) -> ContextlessUpResult<bool> {
 // option = "None" | option_some;
 // option_some = "Some", ws, "(", ws, value, ws, ")";
 
-enum Value<'input> {
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum Value<'input> {
     Unsigned(&'input str),
     Signed(&'input str),
     Float(&'input str),
@@ -215,12 +215,12 @@ enum Value<'input> {
     EnumVariant,
 }
 
-fn value(input: &str) -> ContextlessUpResult<Value> {
+pub fn value(input: &str) -> ContextlessUpResult<Value> {
     // value = unsigned | signed | float | string | char | bool | option | list | map | tuple | struct | enum_variant;
     one_of((
+        float.map_yes(Value::Float),
         unsigned.map_yes(Value::Unsigned),
         signed.map_yes(Value::Signed),
-        float.map_yes(Value::Float),
         string.map_yes(Value::String),
         char.map_yes(Value::Char),
         bool.map_yes(Value::Bool),

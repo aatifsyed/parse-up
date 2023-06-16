@@ -5,7 +5,8 @@ mod many;
 mod one_of;
 mod permute;
 mod recognize;
-mod ron;
+pub mod reedline;
+pub mod ron;
 mod series;
 pub mod util;
 
@@ -25,6 +26,22 @@ pub enum Suggestions {
     Open(Vec<String>),
     /// Must have at least one
     Closed(String, Vec<String>),
+}
+
+impl IntoIterator for Suggestions {
+    type Item = String;
+
+    type IntoIter = std::vec::IntoIter<String>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Suggestions::Open(all) => all.into_iter(),
+            Suggestions::Closed(first, mut rest) => {
+                rest.insert(0, first);
+                rest.into_iter()
+            }
+        }
+    }
 }
 
 /// Successful parse so far.
