@@ -59,7 +59,7 @@ impl<'input, Out, Ctx, Parser> ContextualUpParser<'input, Vec<Out>, Ctx> for Man
 where
     Parser: ContextualUpParser<'input, Out, Ctx>,
 {
-    fn parse_contextual(&self, input: &'input str, ctx: Ctx) -> UpResult<'input, Vec<Out>, Ctx> {
+    fn parse_contextual(&self, _input: &'input str, _ctx: Ctx) -> UpResult<'input, Vec<Out>, Ctx> {
         todo!()
     }
 }
@@ -119,7 +119,7 @@ impl<'input, Out, Ctx, Parser> ContextualUpParser<'input, Vec<Out>, Ctx> for Man
 where
     Parser: ContextualUpParser<'input, Out, Ctx>,
 {
-    fn parse_contextual(&self, input: &'input str, ctx: Ctx) -> UpResult<'input, Vec<Out>, Ctx> {
+    fn parse_contextual(&self, _input: &'input str, _ctx: Ctx) -> UpResult<'input, Vec<Out>, Ctx> {
         todo!()
     }
 }

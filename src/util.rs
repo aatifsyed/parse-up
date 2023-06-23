@@ -55,16 +55,19 @@ pub(crate) const EMPTY_CLOSED_SUGGESTION_PANIC_MSG: &str =
 return an open suggestion or an error instead.";
 
 impl<'input, T> YesAndBuilder<'input, T> {
-    pub fn completely_open(mut self) -> Self {
+    pub fn completely_open(self) -> Self {
         self.open(Vec::<&str>::new())
     }
     pub fn open<SuggestionT>(mut self, suggestions: impl IntoIterator<Item = SuggestionT>) -> Self
     where
         SuggestionT: Display,
     {
-        self.0.could_also = Some(Open(
-            suggestions.into_iter().map(|it| it.to_string()).collect(),
-        ));
+        let new_suggestions = suggestions.into_iter().map(|it| it.to_string());
+        let suggestions = match self.0.could_also.take() {
+            Some(already) => already.into_iter().chain(new_suggestions).collect(),
+            None => new_suggestions.collect(),
+        };
+        self.0.could_also = Some(Open(suggestions));
         self
     }
     /// # Panics
@@ -73,9 +76,19 @@ impl<'input, T> YesAndBuilder<'input, T> {
     where
         SuggestionT: Display,
     {
-        let mut suggestions = suggestions.into_iter().map(|it| it.to_string());
-        let first = suggestions.next().expect(EMPTY_CLOSED_SUGGESTION_PANIC_MSG);
-        self.0.could_also = Some(Closed(first, suggestions.collect()));
+        let new_suggestions = suggestions.into_iter().map(|it| it.to_string());
+        let mut suggestions = match self.0.could_also.take() {
+            Some(already) => already
+                .into_iter()
+                .chain(new_suggestions)
+                .collect::<Vec<_>>(),
+            None => new_suggestions.collect(),
+        };
+        if suggestions.is_empty() {
+            panic!("{}", EMPTY_CLOSED_SUGGESTION_PANIC_MSG)
+        }
+        let first = suggestions.remove(0);
+        self.0.could_also = Some(Closed(first, suggestions));
         self
     }
     pub fn no_ctx(self) -> YesAnd<'input, T, ()> {
@@ -106,6 +119,14 @@ pub fn go_on<GoOnT: Display>(
 pub struct GoOnBuilder<T>(T);
 
 impl GoOnBuilder<Vec<String>> {
+    pub fn or<GoOnT: Display>(
+        mut self,
+        other_suggestions: impl IntoIterator<Item = GoOnT>,
+    ) -> GoOnBuilder<Vec<String>> {
+        self.0
+            .extend(other_suggestions.into_iter().map(|it| it.to_string()));
+        self
+    }
     pub fn open(self) -> GoOnBuilder<Suggestions> {
         GoOnBuilder(Open(self.0))
     }

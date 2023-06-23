@@ -1,5 +1,5 @@
 use anyhow::bail;
-use parse_up::{reedline::UpCompleter, ron};
+use parse_up::{reedline::UpCompleter, ron, ContextlessUpParser};
 use reedline::{
     default_emacs_keybindings, ColumnarMenu, DefaultPrompt, Emacs, KeyCode, KeyModifiers, Reedline,
     ReedlineEvent, ReedlineMenu, Signal,
@@ -20,17 +20,19 @@ fn main() -> anyhow::Result<()> {
     );
 
     let edit_mode = Box::new(Emacs::new(keybindings));
-    match Reedline::create()
-        .with_completer(Box::new(UpCompleter::new(ron::float_int)))
+    let mut repl = Reedline::create()
+        .with_completer(Box::new(UpCompleter::new(ron::float)))
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
-        .with_edit_mode(edit_mode)
-        .read_line(&DefaultPrompt::default())?
-    {
-        Signal::CtrlC | Signal::CtrlD => bail!("input aborted"),
-        Signal::Success(buffer) => {
-            let result = ron::value(&buffer).expect("passed validation");
-            println!("{result:?}");
+        .with_edit_mode(edit_mode);
+    loop {
+        match repl.read_line(&DefaultPrompt::default())? {
+            Signal::CtrlC | Signal::CtrlD => bail!("input aborted"),
+            Signal::Success(buffer) => {
+                let result = ron::float
+                    .parse_contextless(&buffer)
+                    .expect("passed validation");
+                println!("{result:?}");
+            }
         }
     }
-    Ok(())
 }

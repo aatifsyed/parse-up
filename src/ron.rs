@@ -257,4 +257,59 @@ mod tests {
             .no_ctx())
         );
     }
+
+    #[test]
+    fn float_suggest() {
+        assert_eq!(
+            float_int.parse_contextless(""),
+            Err(go_on(0..=9).closed().no_ctx())
+        );
+        assert_eq!(
+            float_int.parse_contextless("0"),
+            Ok(yes_and("0", "").closed(0..=9).no_ctx())
+        );
+
+        assert_eq!(
+            float_frac.parse_contextless(""),
+            Err(go_on(["."]).closed().no_ctx())
+        );
+        assert_eq!(
+            float_frac.parse_contextless("."),
+            Err(go_on(0..=9).closed().no_ctx())
+        );
+        assert_eq!(
+            float_frac.parse_contextless(".1"),
+            Ok(yes_and(".1", "").closed(0..=9).no_ctx())
+        );
+
+        assert_eq!(
+            float_std.parse_contextless(""),
+            Err(go_on(0..=9).closed().no_ctx())
+        );
+        // TODO(aatifsyed): bug here
+        assert_eq!(
+            float_std.parse_contextless("0"),
+            Err(go_on(0..=9).or(["."]).closed().no_ctx())
+        );
+    }
+
+    #[test]
+    fn test_many0() {
+        assert_eq!(
+            many0(digit).parse_contextless(""),
+            Ok(yes_and(vec![], "").closed(0..=9).no_ctx())
+        );
+
+        assert_eq!(
+            many0(digit).parse_contextless("1"),
+            Ok(yes_and(vec!["1"], "").closed(0..=9).no_ctx())
+        );
+
+        assert_eq!(
+            // This is the bug
+            // FIX: many0 should always terminate in one_of((x, y)), where y is the terminating parser
+            series((many0(digit), tag("!"))).parse_contextless(""),
+            Err(go_on(0..=9).or(["!"]).closed().no_ctx())
+        );
+    }
 }

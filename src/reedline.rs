@@ -1,7 +1,7 @@
 use reedline::{Completer, Span};
 use std::marker::PhantomData;
 
-use crate::{ContextlessUpParser, UpError};
+use crate::{ContextlessUpParser, UpError, YesAnd};
 
 pub struct UpCompleter<'input, Parser, Out>(Parser, PhantomData<Out>, PhantomData<&'input ()>);
 
@@ -25,8 +25,14 @@ where
             return vec![]; // only suggest at the end
         }
         let line = unsafe { std::mem::transmute::<_, &'input str>(line) };
-        if let Err(UpError::GoOn { go_on, ctx: _ }) = self.0.parse_contextless(line) {
-            return go_on
+        match self.0.parse_contextless(line) {
+            Ok(YesAnd {
+                could_also: Some(suggestions),
+                ..
+            })
+            | Err(UpError::GoOn {
+                go_on: suggestions, ..
+            }) => suggestions
                 .into_iter()
                 .map(|value| reedline::Suggestion {
                     value,
@@ -38,8 +44,8 @@ where
                     },
                     append_whitespace: false,
                 })
-                .collect();
+                .collect(),
+            _ => vec![], // nothing to suggest
         }
-        vec![] // nothing to suggest
     }
 }
