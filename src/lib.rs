@@ -1,11 +1,13 @@
 mod contextless;
 mod ext;
+mod one_of;
 mod ron;
 pub mod util;
 
 use std::ops::Add;
 
 pub use contextless::*;
+pub use one_of::one_of;
 pub type UpResult<'input, Out> = Result<YesAnd<'input, Out>, UpError<'input>>;
 pub use Suggestions::{Closed, Open};
 
