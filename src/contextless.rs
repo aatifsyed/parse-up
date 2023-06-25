@@ -1,6 +1,6 @@
 use crate::{
     util::{assert_up_parser_fn, chars_needed_to_complete, go_on, oops, yes_and},
-    UpResult,
+    UpParser, UpResult, YesAnd,
 };
 
 pub fn tag<'tag, 'input>(
@@ -33,3 +33,23 @@ const _: () = {
         assert_up_parser_fn(whitespace);
     }
 };
+
+pub fn recognize<'input, Out, Parser>(
+    mut parser: Parser,
+) -> impl FnMut(&'input str) -> UpResult<&str>
+where
+    Parser: UpParser<'input, Out>,
+{
+    assert_up_parser_fn(move |input| {
+        let YesAnd {
+            yes: _,
+            and,
+            suggestions,
+        } = parser.parse_up(input)?;
+        Ok(YesAnd {
+            yes: input.strip_suffix(and).unwrap(),
+            and,
+            suggestions,
+        })
+    })
+}
