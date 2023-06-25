@@ -3,6 +3,8 @@ mod ext;
 mod ron;
 pub mod util;
 
+use std::ops::Add;
+
 pub use contextless::*;
 pub type UpResult<'input, Out> = Result<YesAnd<'input, Out>, UpError<'input>>;
 pub use Suggestions::{Closed, Open};
@@ -70,6 +72,40 @@ impl IntoIterator for Suggestions {
                 rest.insert(0, first);
                 rest.into_iter()
             }
+        }
+    }
+}
+
+impl Add for Suggestions {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        use std::iter::once;
+        match (self, rhs) {
+            (Open(mut o), more @ Open(_) | more @ Closed(..)) => {
+                o.extend(more);
+                Open(o)
+            }
+            (Closed(f, r), Open(more)) => Open(once(f).chain(r).chain(more).collect()),
+            (Closed(f0, mut r0), Closed(f1, r1)) => {
+                r0.extend(once(f1).chain(r1));
+                Closed(f0, r0)
+            }
+        }
+    }
+}
+
+impl Add for UpError<'_> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        use UpError::{GoOn, Oops};
+
+        match (self, rhs) {
+            (oops @ Oops { .. }, Oops { .. }) => oops,
+            (Oops { .. }, go_on @ GoOn(_)) => go_on,
+            (go_on @ GoOn(_), Oops { .. }) => go_on,
+            (GoOn(s0), GoOn(s1)) => GoOn(s0 + s1),
         }
     }
 }
