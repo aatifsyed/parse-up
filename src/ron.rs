@@ -1,3 +1,8 @@
+use crate::{ext::UpParserExt, one_of, tag, UpParser, UpResult};
+
+#[cfg(test)]
+use crate::util::{go_on, yes_and};
+
 /// ## Whitespace and comments
 ///
 /// ```ebnf
@@ -73,13 +78,29 @@
 /// ```ebnf
 /// char = "'", (no_apostrophe | "\\\\" | "\\'"), "'";
 /// ```
-///
+const _: () = ();
+
 /// ## Boolean
 ///
 /// ```ebnf
 /// bool = "true" | "false";
 /// ```
-///
+pub fn bool(input: &str) -> UpResult<bool> {
+    one_of((
+        tag("true").map_yes(|_| true),
+        tag("false").map_yes(|_| false),
+    ))
+    .parse_up(input)
+}
+
+#[test]
+fn test_bool() {
+    assert_eq!(bool.parse_up(""), Err(go_on(["true", "false"]).closed()));
+    assert_eq!(bool.parse_up("t"), Err(go_on(["rue"]).closed()));
+    assert_eq!(bool.parse_up("true..."), Ok(yes_and(true, "...")));
+    assert_eq!(bool.parse_up("false..."), Ok(yes_and(false, "...")));
+}
+
 /// ## Optional
 ///
 /// ```ebnf
