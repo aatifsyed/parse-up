@@ -32,7 +32,8 @@ use crate::util::{go_on, yes_and};
 /// ```ebnf
 /// value = unsigned | signed | float | string | char | bool | option | list | map | tuple | struct | enum_variant;
 /// ```
-///
+const _: () = ();
+
 /// ## Numbers
 ///
 /// ```ebnf
@@ -48,6 +49,44 @@ use crate::util::{go_on, yes_and};
 /// float_frac = ".", digit, {digit};
 /// float_exp = ("e" | "E"), ["+" | "-"], digit, {digit};
 /// ```
+pub mod numbers {
+    use super::*;
+
+    pub fn digit(input: &str) -> UpResult<&str> {
+        one_of((
+            tag("0"),
+            tag("1"),
+            tag("2"),
+            tag("3"),
+            tag("4"),
+            tag("5"),
+            tag("6"),
+            tag("7"),
+            tag("8"),
+            tag("9"),
+        ))
+        .parse_up(input)
+    }
+
+    pub fn hex_digit(input: &str) -> UpResult<&str> {
+        one_of((
+            tag("A"),
+            tag("a"),
+            tag("B"),
+            tag("b"),
+            tag("C"),
+            tag("c"),
+            tag("D"),
+            tag("d"),
+            tag("E"),
+            tag("e"),
+            tag("F"),
+            tag("f"),
+        ))
+        .parse_up(input)
+    }
+}
+
 ///
 /// ## String
 ///
