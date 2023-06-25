@@ -1,7 +1,7 @@
 mod contextless;
 mod ext;
 mod one_of;
-mod ron;
+pub mod ron;
 pub mod util;
 
 use std::ops::Add;
@@ -42,6 +42,11 @@ where
 {
     fn parse_up(&mut self, input: &'input str) -> UpResult<'input, Out> {
         self(input)
+    }
+}
+impl<'input, Out> UpParser<'input, Out> for Box<dyn UpParser<'input, Out>> {
+    fn parse_up(&mut self, input: &'input str) -> UpResult<'input, Out> {
+        (**self).parse_up(input)
     }
 }
 
