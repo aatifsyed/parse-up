@@ -1,4 +1,5 @@
-use proc_macro2::{Ident, Span};
+use proc_macro2::{Ident, Span, TokenStream};
+use quote::quote;
 use syn::Index;
 
 /// (
@@ -21,6 +22,43 @@ fn vars(num_tuples: usize) -> (Vec<Ident>, Vec<Ident>, Vec<Index>) {
         })
         .collect();
     (parser_ty_param, out_ty_param, tuple_ix)
+}
+
+#[doc(hidden)]
+#[proc_macro]
+pub fn _impl_one_of_for_tuples(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let args = match args::parse(item.into()) {
+        Ok(args) => args,
+        Err(e) => return e.into_compile_error().into(),
+    };
+    args.map(|num_tuples| {
+        let (parser_ty_param, _, tuple_ix) = vars(num_tuples);
+        quote! {
+            impl<'input, Out,
+                    #(#parser_ty_param,)*
+                > OneOf<'input, Out>
+                for (
+                    #(#parser_ty_param,)*
+                )
+            where
+                #(#parser_ty_param: UpParser<'input, Out>,)*
+            {
+
+                fn one_of(&mut self, input: &'input str) -> UpResult<'input, Out> {
+                    let mut err = oops(input, "no branches could continue");
+                    #(
+                        match self.#tuple_ix.parse_up(input) {
+                            Ok(o) => return Ok(o),
+                            Err(e) => err = err + e,
+                        }
+                    )*
+                    Err(err)
+                }
+            }
+        }
+    })
+    .collect::<TokenStream>()
+    .into()
 }
 
 mod args {
