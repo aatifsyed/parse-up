@@ -1,6 +1,7 @@
 pub mod util;
 
 pub type UpResult<'input, Out> = Result<YesAnd<'input, Out>, UpError<'input>>;
+pub use Suggestions::{Closed, Open};
 
 /// Successful parse so far.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
