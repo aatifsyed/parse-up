@@ -1,3 +1,5 @@
+pub mod util;
+
 pub type UpResult<'input, Out> = Result<YesAnd<'input, Out>, UpError<'input>>;
 
 /// Successful parse so far.
