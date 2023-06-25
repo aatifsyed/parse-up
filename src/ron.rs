@@ -66,7 +66,7 @@ use crate::util::{go_on, yes_and};
 ///   Example:
 ///   ```rust
 /// r##"This is a "raw string". It can contain quotations or
-/// backslashes (\)!"##
+/// backslashes (\)!"##;
 ///   ```
 /// Raw strings cannot be written in EBNF, as they are context-sensitive.
 /// Also see [the Rust document] about context-sensitivity of raw strings.
