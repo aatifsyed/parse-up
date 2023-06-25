@@ -3,6 +3,7 @@ mod ext;
 mod many;
 mod one_of;
 pub mod ron;
+mod series;
 pub mod util;
 
 use std::ops::Add;
@@ -10,6 +11,7 @@ use std::ops::Add;
 pub use contextless::*;
 pub use many::many_terminated;
 pub use one_of::one_of;
+pub use series::series;
 pub type UpResult<'input, Out> = Result<YesAnd<'input, Out>, UpError<'input>>;
 pub use Suggestions::{Closed, Open};
 

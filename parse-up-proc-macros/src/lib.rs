@@ -61,6 +61,52 @@ pub fn _impl_one_of_for_tuples(item: proc_macro::TokenStream) -> proc_macro::Tok
     .into()
 }
 
+#[doc(hidden)]
+#[proc_macro]
+pub fn _impl_series_for_tuples(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let args = match args::parse(item.into()) {
+        Ok(args) => args,
+        Err(e) => return e.into_compile_error().into(),
+    };
+    args.map(|num_tuples| {
+        let (parser_ty_param, parser_out, tuple_ix) = vars(num_tuples);
+        quote! {
+            impl<'input,
+                #(#parser_out,)*
+                #(#parser_ty_param,)*
+                > Series<'input, (
+                    #(#parser_out,)*
+                )> for (
+                    #(#parser_ty_param,)*
+                )
+            where
+                #(#parser_ty_param: UpParser<'input, #parser_out>,)*
+            {
+                #[allow(unused_variables, unused_assignments)]
+                fn series(&mut self, mut input: &'input str) -> UpResult<'input, (
+                    #(#parser_out,)*
+                )> {
+                    let mut final_suggestions = None;
+                    Ok(YesAnd {
+                        yes: (
+                            #({
+                                let YesAnd { yes, and, suggestions } = self.#tuple_ix.parse_up(input)?;
+                                final_suggestions = suggestions;
+                                input = and;
+                                yes
+                            },)*
+                        ),
+                        and: input,
+                        suggestions: final_suggestions,
+                    })
+                }
+            }
+        }
+    })
+    .collect::<TokenStream>()
+    .into()
+}
+
 mod args {
     use std::ops::{Range, RangeInclusive};
 
