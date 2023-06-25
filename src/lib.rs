@@ -1,5 +1,7 @@
+mod contextless;
 pub mod util;
 
+pub use contextless::*;
 pub type UpResult<'input, Out> = Result<YesAnd<'input, Out>, UpError<'input>>;
 pub use Suggestions::{Closed, Open};
 
