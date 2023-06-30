@@ -10,7 +10,7 @@ use std::ops::Add;
 
 pub use contextless::*;
 use itertools::Itertools as _;
-pub use many::many_terminated;
+pub use many::{many_terminated, many_terminated_full, many_terminated_recognised};
 pub use one_of::one_of;
 pub use series::series;
 pub type UpResult<'input, Out> = Result<YesAnd<'input, Out>, UpError<'input>>;

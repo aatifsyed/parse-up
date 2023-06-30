@@ -8,15 +8,56 @@ use crate::{
 
 use std::ops::RangeBounds;
 
-/// Parsing multiple items while keeping suggestions is non-trivial
+pub fn many_terminated<'input, Out, RepeatParser, TerminalParser, Terminator>(
+    repeat: RepeatParser,
+    terminal: TerminalParser,
+    bounds: impl RangeBounds<usize>,
+) -> impl FnMut(&'input str) -> UpResult<'input, Vec<Out>>
+where
+    RepeatParser: UpParser<'input, Out>,
+    TerminalParser: UpParser<'input, Terminator>,
+{
+    let mut parser =
+        many_terminated_full(repeat, terminal, bounds).map_yes(|(yeses, _rest, _terminator)| yeses);
+    assert_up_parser_fn(move |input| parser.parse_up(input))
+}
+
+pub fn many_terminated_recognised<'input, Out, RepeatParser, TerminalParser, Terminator>(
+    repeat: RepeatParser,
+    terminal: TerminalParser,
+    bounds: impl RangeBounds<usize>,
+) -> impl FnMut(&'input str) -> UpResult<'input, &'input str>
+where
+    RepeatParser: UpParser<'input, Out>,
+    TerminalParser: UpParser<'input, Terminator>,
+{
+    let mut parser = many_terminated_full(repeat, terminal, bounds);
+    assert_up_parser_fn(move |input| match parser.parse_up(input) {
+        Ok(YesAnd {
+            yes: (_yeses, rest, _terminator),
+            and,
+            suggestions,
+        }) => Ok(YesAnd {
+            yes: input.strip_suffix(rest).unwrap(),
+            and,
+            suggestions,
+        }),
+        Err(e) => Err(e),
+    })
+}
+
+/// Returns
+/// - The repeats
+/// - The slice where the terminator started
+/// - The terminator
 ///
 /// # Panics
 /// If `many` and `terminal` both successfully parse an input
-pub fn many_terminated<'input, Out, RepeatParser, TerminalParser, Terminator>(
+pub fn many_terminated_full<'input, Out, RepeatParser, TerminalParser, Terminator>(
     mut repeat: RepeatParser,
     mut terminal: TerminalParser,
     bounds: impl RangeBounds<usize>,
-) -> impl FnMut(&'input str) -> UpResult<'input, (Vec<Out>, Terminator)>
+) -> impl FnMut(&'input str) -> UpResult<'input, (Vec<Out>, &'input str, Terminator)>
 where
     RepeatParser: UpParser<'input, Out>,
     TerminalParser: UpParser<'input, Terminator>,
@@ -53,7 +94,7 @@ where
                         }),
                     ) => {
                         return Ok(YesAnd {
-                            yes: (yeses, yes),
+                            yes: (yeses, input, yes),
                             and,
                             suggestions,
                         })
@@ -66,14 +107,14 @@ where
         // must terminate
         terminal
             .borrowed()
-            .map_yes(|terminator| (std::mem::take(&mut yeses), terminator))
+            .map_yes(|terminator| (std::mem::take(&mut yeses), input, terminator))
             .parse_up(input)
     })
 }
 
 #[test]
 fn test() {
-    let mut many0 = many_terminated(ron::bool, tag("end"), ..);
+    let mut many0 = many_terminated_full(ron::bool, tag("end"), ..);
 
     assert_eq!(
         many0.parse_up(""),
@@ -85,7 +126,13 @@ fn test() {
         Err(go_on(["true", "false", "end"]).closed())
     );
     assert_eq!(
-        many0.parse_up("trueend"),
-        Ok(yes_and((vec![true], "end"), ""))
+        many0.parse_up("trueend..."),
+        Ok(yes_and((vec![true], "end...", "end"), "..."))
+    );
+
+    let mut parser = many_terminated_recognised(ron::bool, tag("!"), ..);
+    assert_eq!(
+        parser.parse_up("truefalse!..."),
+        Ok(yes_and("truefalse", "..."))
     );
 }

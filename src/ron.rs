@@ -50,7 +50,7 @@ const _: () = ();
 /// float_exp = ("e" | "E"), ["+" | "-"], digit, {digit};
 /// ```
 pub mod numbers {
-    use crate::{many_terminated, recognize, series, util::assert_up_parser_fn};
+    use crate::{many_terminated_full, recognize, series, util::assert_up_parser_fn};
 
     use super::*;
 
@@ -103,22 +103,26 @@ pub mod numbers {
                 // lifted option
                 recognize(series((
                     digit,
-                    many_terminated(one_of((digit, tag("_"))), terminal.share(), ..),
+                    many_terminated_full(one_of((digit, tag("_"))), terminal.share(), ..),
                 ))),
                 recognize(series((
                     tag("0b"),
                     digit,
-                    many_terminated(one_of((digit, tag("_"))), terminal.share(), ..),
+                    many_terminated_full(one_of((digit, tag("_"))), terminal.share(), ..),
                 ))),
                 recognize(series((
                     tag("0o"),
                     digit,
-                    many_terminated(one_of((digit, tag("_"))), terminal.share(), ..),
+                    many_terminated_full(one_of((digit, tag("_"))), terminal.share(), ..),
                 ))),
                 recognize(series((
                     tag("0x"),
                     one_of((digit, hex_digit)),
-                    many_terminated(one_of((digit, hex_digit, tag("_"))), terminal.share(), ..),
+                    many_terminated_full(
+                        one_of((digit, hex_digit, tag("_"))),
+                        terminal.share(),
+                        ..,
+                    ),
                 ))),
             ))
             .parse_up(input)
