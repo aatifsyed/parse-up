@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use crate::{util::assert_up_parser, UpParser, UpResult, YesAnd};
 
@@ -19,6 +19,9 @@ pub trait UpParserExt<'input, Out>: UpParser<'input, Out> {
     fn borrowed(&mut self) -> Borrowed<'_, Self> {
         // assert_up_parser::<'input, Out, _>(Borrowed(self))
         Borrowed(self)
+    }
+    fn shareable(&mut self) -> Shareable<'_, Self> {
+        Shareable::new(self)
     }
 }
 
@@ -60,5 +63,26 @@ where
 {
     fn parse_up(&mut self, input: &'input str) -> UpResult<'input, Out> {
         self.0.parse_up(input)
+    }
+}
+
+pub struct Shareable<'a, T: ?Sized>(Rc<RefCell<&'a mut T>>);
+
+impl<'a, T> Clone for Shareable<'a, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<'a, T: ?Sized> Shareable<'a, T> {
+    pub fn new(parser: &'a mut T) -> Self {
+        Shareable(Rc::new(RefCell::new(parser)))
+    }
+    pub fn share<'input, Out>(&self) -> impl FnMut(&'input str) -> UpResult<'input, Out> + 'a
+    where
+        T: UpParser<'input, Out>,
+    {
+        let rc = Rc::clone(&self.0);
+        move |input| RefCell::borrow_mut(&rc).parse_up(input)
     }
 }

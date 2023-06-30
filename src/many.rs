@@ -36,10 +36,7 @@ where
         // could terminate
         while bounds.contains(&yeses.len()) {
             loop {
-                match (
-                    repeat.borrowed().parse_up(input),
-                    terminal.borrowed().parse_up(input),
-                ) {
+                match (repeat.parse_up(input), terminal.parse_up(input)) {
                     (Ok(_), Ok(_)) => panic!(
                         "repeating parser and terminal parser both succeeded on input {input}"
                     ),
