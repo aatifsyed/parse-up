@@ -50,6 +50,8 @@ const _: () = ();
 /// float_exp = ("e" | "E"), ["+" | "-"], digit, {digit};
 /// ```
 pub mod numbers {
+    use crate::{many_terminated, recognize, series, util::assert_up_parser_fn};
+
     use super::*;
 
     pub fn digit(input: &str) -> UpResult<&str> {
@@ -71,19 +73,87 @@ pub mod numbers {
     pub fn hex_digit(input: &str) -> UpResult<&str> {
         one_of((
             tag("A"),
-            tag("a"),
             tag("B"),
-            tag("b"),
             tag("C"),
-            tag("c"),
             tag("D"),
-            tag("d"),
             tag("E"),
-            tag("e"),
             tag("F"),
+            tag("a"),
+            tag("b"),
+            tag("c"),
+            tag("d"),
+            tag("e"),
             tag("f"),
         ))
         .parse_up(input)
+    }
+
+    pub fn unsigned_then<'input, TerminalParser, Terminator>(
+        mut terminal: TerminalParser,
+    ) -> impl FnMut(&'input str) -> UpResult<&str>
+    where
+        TerminalParser: UpParser<'input, Terminator>,
+    {
+        // TODO(aatifsyed): only accept binary digits and octal digits after their respective prefixes
+        assert_up_parser_fn(move |input| {
+            // unsigned = (["0", ("b" | "o")], digit, { digit | '_' } |
+            //              "0x", (digit | hex_digit), { digit | hex_digit | '_' });
+            let terminal = terminal.shareable();
+            one_of((
+                // lifted option
+                recognize(series((
+                    digit,
+                    many_terminated(one_of((digit, tag("_"))), terminal.share(), ..),
+                ))),
+                recognize(series((
+                    tag("0b"),
+                    digit,
+                    many_terminated(one_of((digit, tag("_"))), terminal.share(), ..),
+                ))),
+                recognize(series((
+                    tag("0o"),
+                    digit,
+                    many_terminated(one_of((digit, tag("_"))), terminal.share(), ..),
+                ))),
+                recognize(series((
+                    tag("0x"),
+                    one_of((digit, hex_digit)),
+                    many_terminated(one_of((digit, hex_digit, tag("_"))), terminal.share(), ..),
+                ))),
+            ))
+            .parse_up(input)
+        })
+    }
+
+    #[test]
+    fn test_unsigned_then() {
+        let mut parser = unsigned_then(tag("!"));
+        assert_eq!(
+            parser.parse_up(""),
+            Err(go_on(0..=9).or(["0b", "0o", "0x"]).closed())
+        );
+        assert_eq!(
+            parser.parse_up("0"),
+            Err(go_on(0..=9).or(["_", "!", "b", "o", "x"]).closed())
+        );
+        assert_eq!(parser.parse_up("0!..."), Ok(yes_and("0!", "...")));
+        assert_eq!(
+            parser.parse_up("0_"),
+            Err(go_on(0..=9).or(["_", "!"]).closed())
+        );
+        assert_eq!(
+            parser.parse_up("0x"),
+            Err(go_on(0..=9).or('A'..='F').or('a'..='f').closed())
+        );
+
+        assert_eq!(
+            parser.parse_up("0xA"),
+            Err(go_on(0..=9)
+                .or('A'..='F')
+                .or('a'..='f')
+                .or(["_", "!"])
+                .closed())
+        );
     }
 }
 
