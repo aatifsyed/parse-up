@@ -9,6 +9,7 @@ pub mod util;
 use std::ops::Add;
 
 pub use contextless::*;
+use itertools::Itertools as _;
 pub use many::many_terminated;
 pub use one_of::one_of;
 pub use series::series;
@@ -48,6 +49,7 @@ where
         self(input)
     }
 }
+
 impl<'input, Out> UpParser<'input, Out> for Box<dyn UpParser<'input, Out>> {
     fn parse_up(&mut self, input: &'input str) -> UpResult<'input, Out> {
         (**self).parse_up(input)
@@ -93,15 +95,17 @@ impl Add for Suggestions {
     fn add(self, rhs: Self) -> Self::Output {
         use std::iter::once;
         match (self, rhs) {
-            (Open(mut o), more @ Open(_) | more @ Closed(..)) => {
-                o.extend(more);
-                Open(o)
-            }
-            (Closed(f, r), Open(more)) => Open(once(f).chain(r).chain(more).collect()),
-            (Closed(f0, mut r0), Closed(f1, r1)) => {
-                r0.extend(once(f1).chain(r1));
-                Closed(f0, r0)
-            }
+            (Open(o), more) => Open(o.into_iter().chain(more).unique().collect()),
+            (Closed(f, r), Open(more)) => Open(once(f).chain(r).chain(more).unique().collect()),
+            (Closed(f0, r0), Closed(f1, r1)) => Closed(
+                f0.clone(),
+                r0.into_iter()
+                    .chain([f1])
+                    .chain(r1)
+                    .filter(|each| each != &f0)
+                    .unique()
+                    .collect(),
+            ),
         }
     }
 }
