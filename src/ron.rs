@@ -190,6 +190,37 @@ pub mod numbers {
         })
     }
 
+    pub fn signed_then<'input, TerminalParser, Terminator>(
+        mut terminal: TerminalParser,
+    ) -> impl FnMut(&'input str) -> UpResult<&str>
+    where
+        TerminalParser: UpParser<'input, Terminator>,
+    {
+        assert_up_parser_fn(move |input| {
+            let terminal = terminal.shareable();
+            one_of((
+                unsigned_then(terminal.share()),
+                {
+                    let terminal = terminal.clone();
+                    move |input: &'input str| {
+                        series((tag("+"), unsigned_then(terminal.share())))
+                            .map_yes(|(plus, unsigned)| &input[..(plus.len() + unsigned.len())])
+                            .parse_up(input)
+                    }
+                },
+                {
+                    let terminal = terminal.clone();
+                    move |input: &'input str| {
+                        series((tag("-"), unsigned_then(terminal.share())))
+                            .map_yes(|(plus, unsigned)| &input[..(plus.len() + unsigned.len())])
+                            .parse_up(input)
+                    }
+                },
+            ))
+            .parse_up(input)
+        })
+    }
+
     #[test]
     fn test_unsigned_then() {
         let mut parser = unsigned_then(tag("!"));
@@ -221,6 +252,12 @@ pub mod numbers {
                 .or(["_", "!"])
                 .closed())
         );
+
+        assert_eq!(
+            signed_then(tag("!"))(""),
+            Err(go_on(0..=9).or(["0b", "0o", "0x"]).or(["+", "-"]).closed())
+        );
+        assert_eq!(signed_then(tag("!"))("+1!..."), Ok(yes_and("+1", "...")));
     }
 }
 
