@@ -70,6 +70,24 @@ pub mod numbers {
         .parse_up(input)
     }
 
+    pub fn octal_digit(input: &str) -> UpResult<&str> {
+        one_of((
+            tag("0"),
+            tag("1"),
+            tag("2"),
+            tag("3"),
+            tag("4"),
+            tag("5"),
+            tag("6"),
+            tag("7"),
+        ))
+        .parse_up(input)
+    }
+
+    pub fn binary_digit(input: &str) -> UpResult<&str> {
+        one_of((tag("0"), tag("1"))).parse_up(input)
+    }
+
     pub fn hex_digit(input: &str) -> UpResult<&str> {
         one_of((
             tag("A"),
@@ -107,13 +125,13 @@ pub mod numbers {
                 ))),
                 recognize(series((
                     tag("0b"),
-                    digit,
-                    many_terminated_full(one_of((digit, tag("_"))), terminal.share(), ..),
+                    binary_digit,
+                    many_terminated_full(one_of((binary_digit, tag("_"))), terminal.share(), ..),
                 ))),
                 recognize(series((
                     tag("0o"),
-                    digit,
-                    many_terminated_full(one_of((digit, tag("_"))), terminal.share(), ..),
+                    octal_digit,
+                    many_terminated_full(one_of((octal_digit, tag("_"))), terminal.share(), ..),
                 ))),
                 recognize(series((
                     tag("0x"),
@@ -145,6 +163,8 @@ pub mod numbers {
             parser.parse_up("0_"),
             Err(go_on(0..=9).or(["_", "!"]).closed())
         );
+        assert_eq!(parser.parse_up("0b"), Err(go_on([0, 1]).closed()));
+        assert_eq!(parser.parse_up("0o"), Err(go_on(0..=7).closed()));
         assert_eq!(
             parser.parse_up("0x"),
             Err(go_on(0..=9).or('A'..='F').or('a'..='f').closed())
