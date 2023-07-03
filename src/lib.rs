@@ -50,7 +50,7 @@ where
     }
 }
 
-impl<'input, Out> UpParser<'input, Out> for Box<dyn UpParser<'input, Out>> {
+impl<'parser, 'input, Out> UpParser<'input, Out> for Box<dyn UpParser<'input, Out> + 'parser> {
     fn parse_up(&mut self, input: &'input str) -> UpResult<'input, Out> {
         (**self).parse_up(input)
     }

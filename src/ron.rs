@@ -1,4 +1,6 @@
-use crate::{ext::UpParserExt, one_of, tag, UpParser, UpResult};
+use std::{any::Any, ops::ControlFlow};
+
+use crate::{ext::UpParserExt, one_of, tag, util::assert_up_parser_fn, UpParser, UpResult, YesAnd};
 
 #[cfg(test)]
 use crate::util::{go_on, yes_and};
@@ -320,13 +322,94 @@ fn test_bool() {
 /// option = "None" | option_some;
 /// option_some = "Some", ws, "(", ws, value, ws, ")";
 /// ```
-///
+const _: () = ();
+
 /// ## List
 ///
 /// ```ebnf
 /// list = "[", [value, { comma, value }, [comma]], "]";
 /// ```
-///
+pub fn list<'input, Out>(
+    // takes in a parser for a terminator, and returns a parser for `Out`, discarding the terminator
+    mut factory: impl FnMut(
+        Box<dyn UpParser<'input, Box<dyn Any>>>,
+    ) -> Box<dyn UpParser<'input, Out> + 'input>,
+) -> impl FnMut(&'input str) -> UpResult<'input, Vec<Out>> {
+    assert_up_parser_fn(move |mut input: &'input str| {
+        let YesAnd { and, .. } = tag("[")(input)?;
+        input = and;
+        let mut yeses = vec![];
+
+        loop {
+            match one_of((
+                factory(Box::new(|input| {
+                    tag(",").map_yes(|_| Box::new(()) as _).parse_up(input)
+                }))
+                .map_yes(ControlFlow::Continue),
+                factory(Box::new(|input| {
+                    tag("]").map_yes(|_| Box::new(()) as _).parse_up(input)
+                }))
+                .map_yes(ControlFlow::Break),
+            ))
+            .parse_up(input)
+            {
+                Ok(YesAnd {
+                    yes: ControlFlow::Continue(yes),
+                    and,
+                    suggestions: _,
+                }) => {
+                    yeses.push(yes);
+                    input = and;
+                    continue;
+                }
+                Ok(YesAnd {
+                    yes: ControlFlow::Break(yes),
+                    and,
+                    suggestions: _,
+                }) => {
+                    yeses.push(yes);
+                    return Ok(YesAnd {
+                        yes: yeses,
+                        and,
+                        suggestions: None,
+                    });
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    })
+}
+
+#[test]
+fn test_list() {
+    let mut parser = list(|t| Box::new(numbers::unsigned_then(t)));
+    assert_eq!(parser.parse_up(""), Err(go_on(["["]).closed()));
+    assert_eq!(
+        parser.parse_up("["),
+        Err(go_on(0..=9).or(["0b", "0o", "0x"]).closed())
+    );
+    assert_eq!(
+        parser.parse_up("[123"),
+        Err(go_on(0..=9)
+            .or(["_"])
+            .or([
+                ",", // continue
+                "]"  // terminate
+            ])
+            .closed())
+    );
+
+    assert_eq!(parser.parse_up("[123]..."), Ok(yes_and(vec!["123"], "...")));
+    assert_eq!(
+        parser.parse_up("[123,"),
+        Err(go_on(0..=9).or(["0b", "0o", "0x"]).closed())
+    );
+    assert_eq!(
+        parser.parse_up("[123,123]..."),
+        Ok(yes_and(vec!["123", "123"], "..."))
+    );
+}
+
 /// ## Map
 ///
 /// ```ebnf
