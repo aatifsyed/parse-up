@@ -324,6 +324,34 @@ fn test_bool() {
 /// ```
 const _: () = ();
 
+pub trait MakeTerminatedParser<'this, 'input, Out> {
+    type NewlyMadeParser: UpParser<'input, Out>;
+    fn make_terminated_parser<TerminalParser, Terminator>(
+        &'this mut self,
+        terminal_parser: TerminalParser,
+    ) -> Self::NewlyMadeParser
+    where
+        TerminalParser: UpParser<'input, Terminator>;
+}
+
+impl<'this, 'input, Out, MakeTerminatedParserFn> MakeTerminatedParser<'this, 'input, Out>
+    for MakeTerminatedParserFn
+where
+    MakeTerminatedParserFn: FnMut(Box<dyn UpParser<'input, Box<dyn Any>>>),
+{
+    type NewlyMadeParser = Box<dyn UpParser<'input, Out>>;
+
+    fn make_terminated_parser<TerminalParser, Terminator>(
+        &'this mut self,
+        terminal_parser: TerminalParser,
+    ) -> Self::NewlyMadeParser
+    where
+        TerminalParser: UpParser<'input, Terminator>,
+    {
+        todo!()
+    }
+}
+
 /// ## List
 ///
 /// ```ebnf
