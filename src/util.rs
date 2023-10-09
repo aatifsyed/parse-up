@@ -2,14 +2,14 @@ use std::fmt::Display;
 
 use crate::{Closed, Open, Suggestions, UpError, UpParser, UpResult, YesAnd};
 
-pub fn assert_up_parser<'input, Out, Parser>(p: Parser) -> Parser
+pub const fn assert_up_parser<'input, Out, Parser>(p: Parser) -> Parser
 where
     Parser: UpParser<'input, Out>,
 {
     p
 }
 
-pub fn assert_up_parser_fn<'input, Out, Parser>(p: Parser) -> Parser
+pub const fn assert_up_parser_fn<'input, Out, Parser>(p: Parser) -> Parser
 where
     Parser: FnMut(&'input str) -> UpResult<'input, Out>,
 {

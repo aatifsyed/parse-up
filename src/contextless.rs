@@ -29,9 +29,7 @@ pub fn whitespace(input: &str) -> UpResult<&str> {
 }
 
 const _: () = {
-    fn test() {
-        assert_up_parser_fn(whitespace);
-    }
+    assert_up_parser_fn(whitespace);
 };
 
 pub fn recognize<'input, Out, Parser>(
