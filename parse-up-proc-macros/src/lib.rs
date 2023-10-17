@@ -107,6 +107,77 @@ pub fn _impl_series_for_tuples(item: proc_macro::TokenStream) -> proc_macro::Tok
     .into()
 }
 
+#[doc(hidden)]
+#[proc_macro]
+pub fn _impl_permute_for_tuples(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let args = match args::parse(item.into()) {
+        Ok(args) => args,
+        Err(e) => return e.into_compile_error().into(),
+    };
+    args.map(|num_tuples| {
+        let (parser_ty_param, parser_out, tuple_ix) = vars(num_tuples);
+        let holding = tuple_ix
+            .iter()
+            .map(|it| Ident::new(&format!("yes{}", it.index), it.span))
+            .collect::<Vec<_>>();
+        quote! {
+            impl<'input,
+                #(#parser_out,)*
+                #(#parser_ty_param,)*
+                > Permute<'input, (
+                    #(#parser_out,)*
+                )> for (
+                    #(#parser_ty_param,)*
+                )
+            where
+                #(#parser_ty_param: UpParser<'input, #parser_out>,)*
+            {
+                #[allow(unused_variables, unused_assignments)]
+                fn permute(&mut self, mut input: &'input str) -> UpResult<'input, (
+                    #(#parser_out,)*
+                )> {
+                    #(let mut #holding = None;)*
+                    loop {
+                        let mut errs = oops(input, "no branches could continue");
+                        let mut current_suggestions = None;
+                        #(
+                            if let None = #holding {
+                                match self.#tuple_ix.parse_up(input) {
+                                    Ok(YesAnd {
+                                        yes, and, suggestions
+                                    }) => {
+                                        input = and;
+                                        #holding = Some(yes);
+                                        current_suggestions = suggestions;
+                                        continue
+                                    },
+                                    Err(e) => errs = errs + e
+                                }
+                            }
+                        )*
+                        match (
+                            #(#holding,)*
+                        ) {
+                            (
+                                #(Some(#holding),)*
+                            ) => {
+                                break Ok(YesAnd {
+                                    yes: (#(#holding,)*),
+                                    and: input,
+                                    suggestions: current_suggestions,
+                                })
+                            }
+                            _ => break Err(errs),
+                        }
+                    }
+                }
+            }
+        }
+    })
+    .collect::<TokenStream>()
+    .into()
+}
+
 mod args {
     use std::ops::{Range, RangeInclusive};
 
